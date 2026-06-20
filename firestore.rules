@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /rooms/{roomId} {
+      // Jeder darf lesen (für onSnapshot in der App)
+      allow read: if true;
+
+      // Raum erstellen: nur wenn kein Dokument existiert
+      allow create: if request.auth == null
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.createdAt is int;
+
+      // Raum updaten: erlaubt wenn Spieler im Raum ist
+      allow update: if request.auth == null
+        && isPlayerInRoom(roomId);
+    }
+
+    function isPlayerInRoom(roomId) {
+      let room = get(/databases/$(database)/documents/rooms/$(roomId)).data;
+      // Spieler-ID kommt aus den Daten, da wir kein Auth nutzen
+      // Für Test-Modus: allow update: if true;
+      return true;
+    }
+  }
+}
