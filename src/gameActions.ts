@@ -343,6 +343,11 @@ export async function continueAfterBusFail(room: GameRoom): Promise<void> {
   });
 }
 
+export async function reshuffleBusDeck(room: GameRoom): Promise<void> {
+  const newDeck = createDeck(room.settings, 'bus');
+  await updateDoc(doc(db, 'rooms', room.id), { deck: newDeck });
+}
+
 export async function restartGame(room: GameRoom): Promise<void> {
   const players: Record<string, Player> = {};
   for (const id of room.playerOrder) {

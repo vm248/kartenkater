@@ -9,6 +9,7 @@ import {
   startBusfahren,
   makeBusAnswer,
   continueAfterBusFail,
+  reshuffleBusDeck,
   restartGame,
 } from '../gameActions';
 
@@ -244,6 +245,7 @@ export default function Game({ room, playerId }: Props) {
     const isBusfahrer = room.busfahrerId === playerId;
     const prev = room.previousBusCards[room.busIndex] ?? null;
     const isHL = room.useHigherLower && prev !== null;
+    const deckEmpty = room.deck.length === 0;
 
     return (
       <div className="game-area">
@@ -274,7 +276,7 @@ export default function Game({ room, playerId }: Props) {
           🃏 {room.deck.length} Karten im Deck
         </p>
 
-        {!room.awaitingContinue && room.busIndex < 5 && (
+        {!room.awaitingContinue && room.busIndex < 5 && !deckEmpty && (
           <div className="card-display">
             {isHL && prev
               ? `Karte ${room.busIndex + 1}: Höher oder Tiefer als ${prev.value}${prev.suit}?`
@@ -282,10 +284,20 @@ export default function Game({ room, playerId }: Props) {
           </div>
         )}
 
+        {deckEmpty && room.busIndex < 5 && (
+          <div className="feedback wrong" style={{ marginBottom: 8 }}>
+            🃏 Das Deck ist leer!
+          </div>
+        )}
+
         {isBusfahrer ? (
           room.awaitingContinue ? (
             <button onClick={() => continueAfterBusFail(room)}>
               😵 Nochmal von vorne!
+            </button>
+          ) : deckEmpty && room.busIndex < 5 ? (
+            <button onClick={() => reshuffleBusDeck(room)}>
+              🔀 Neu mischen & weiterspielen
             </button>
           ) : room.busIndex < 5 ? (
             <div className="choices">
@@ -296,7 +308,9 @@ export default function Game({ room, playerId }: Props) {
           ) : null
         ) : (
           <div className="waiting-text" style={{ fontSize: 15 }}>
-            👀 {room.busfahrerName} fährt gerade Bus…
+            {deckEmpty && room.busIndex < 5
+              ? '🃏 Deck leer – wartet auf neues Mischen…'
+              : `👀 ${room.busfahrerName} fährt gerade Bus…`}
           </div>
         )}
       </div>
