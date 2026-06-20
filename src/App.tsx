@@ -3,11 +3,13 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import type { GameRoom } from './types';
 import { getPlayerId } from './gameActions';
+import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
 import Game from './pages/Game';
 
 export default function App() {
+  const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(
     () => sessionStorage.getItem('busfahren_room')
   );
@@ -42,6 +44,7 @@ export default function App() {
     sessionStorage.removeItem('busfahren_room');
     setRoomId(null);
     setRoom(null);
+    setSelectedGame(null);
   }
 
   const showGame = room && room.status !== 'lobby';
@@ -70,7 +73,10 @@ export default function App() {
         )}
       </div>
 
-      {!roomId && <Home onJoined={handleJoined} />}
+      {!roomId && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
+      {!roomId && selectedGame === 'busfahren' && (
+        <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} />
+      )}
       {showLobby && <Lobby room={room} playerId={playerId} />}
       {showGame && <Game room={room} playerId={playerId} />}
     </>

@@ -3,9 +3,10 @@ import { createRoom, joinRoom, getPlayerId } from '../gameActions';
 
 interface Props {
   onJoined: (roomId: string) => void;
+  onBack: () => void;
 }
 
-export default function Home({ onJoined }: Props) {
+export default function Home({ onJoined, onBack }: Props) {
   const [name, setName] = useState(() => localStorage.getItem('busfahren_name') ?? '');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,12 @@ export default function Home({ onJoined }: Props) {
 
   return (
     <div className="game-area">
+      <button
+        onClick={onBack}
+        style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--primary)', fontSize: 15, padding: '0 0 8px', cursor: 'pointer' }}
+      >
+        ‹ Zurück
+      </button>
       <h1>🚌 Busfahren</h1>
 
       <label>Dein Name</label>
