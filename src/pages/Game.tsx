@@ -296,9 +296,14 @@ export default function Game({ room, playerId }: Props) {
               😵 Nochmal von vorne!
             </button>
           ) : deckEmpty && room.busIndex < 5 ? (
-            <button onClick={() => reshuffleBusDeck(room)}>
-              🔀 Neu mischen & weiterspielen
-            </button>
+            <>
+              <button onClick={() => reshuffleBusDeck(room)}>
+                🔀 Neu mischen & weiterspielen
+              </button>
+              <button onClick={() => restartGame(room)} style={{ marginTop: 8, background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                🏠 Deck leer – zurück zum Hauptmenü
+              </button>
+            </>
           ) : room.busIndex < 5 ? (
             <div className="choices">
               {(isHL ? ['Höher', 'Tiefer'] : ['Rot', 'Schwarz']).map(opt => (
