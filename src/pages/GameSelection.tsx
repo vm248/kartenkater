@@ -10,27 +10,9 @@ const GAMES = [
     desc: 'Kartenspiel für 2–8 Spieler',
     available: true,
   },
-  {
-    id: 'ringoffire',
-    emoji: '🃏',
-    name: 'Ring of Fire',
-    desc: 'Das Klassiker-Trinkspiel',
-    available: false,
-  },
-  {
-    id: 'arschloch',
-    emoji: '♠️',
-    name: 'Arschloch',
-    desc: 'Kartenrangspiel mit Trinken',
-    available: false,
-  },
-  {
-    id: 'ichhnocnie',
-    emoji: '🍺',
-    name: 'Ich hab noch nie',
-    desc: 'Geständnisse & Trinken',
-    available: false,
-  },
+  { id: 'soon1', emoji: '🃏', name: 'Bald verfügbar', desc: '', available: false },
+  { id: 'soon2', emoji: '🎲', name: 'Bald verfügbar', desc: '', available: false },
+  { id: 'soon3', emoji: '🍺', name: 'Bald verfügbar', desc: '', available: false },
 ];
 
 export default function GameSelection({ onSelect }: Props) {
@@ -70,19 +52,6 @@ export default function GameSelection({ onSelect }: Props) {
                 {game.desc}
               </div>
             </div>
-            {!game.available && (
-              <span style={{
-                fontSize: 11,
-                background: 'var(--border)',
-                color: 'var(--text)',
-                padding: '3px 8px',
-                borderRadius: 20,
-                whiteSpace: 'nowrap',
-                opacity: 0.7,
-              }}>
-                Bald verfügbar
-              </span>
-            )}
             {game.available && (
               <span style={{ fontSize: 18, opacity: 0.4 }}>›</span>
             )}
