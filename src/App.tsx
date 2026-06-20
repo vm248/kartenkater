@@ -61,14 +61,14 @@ export default function App() {
         >
           {dark ? '☀️' : '🌙'}
         </button>
-        {roomId && (
+        {(selectedGame || roomId) && (
           <button
             className="icon-btn"
             onClick={handleLeave}
-            title="Raum verlassen"
+            title="Hauptmenü"
             style={{ background: 'var(--card)', borderRadius: 8, padding: '6px 10px' }}
           >
-            🚪
+            🏠
           </button>
         )}
       </div>
