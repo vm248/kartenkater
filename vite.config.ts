@@ -8,9 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Busfahren – Trinkspiel',
-        short_name: 'Busfahren',
-        description: 'Multiplayer Busfahren Trinkspiel',
+        name: 'Trinkspiele',
+        short_name: 'Trinkspiele',
+        description: 'Multiplayer Trinkspiele',
         theme_color: '#007acc',
         background_color: '#101820',
         display: 'standalone',
