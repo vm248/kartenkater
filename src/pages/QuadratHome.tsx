@@ -57,7 +57,7 @@ export default function QuadratHome({ onJoined, onBack }: Props) {
       >
         ‹ Zurück
       </button>
-      <h1>⬛ Das Quadrat</h1>
+      <h1>🪟 Das Fenster</h1>
 
       <label>Dein Name</label>
       <input

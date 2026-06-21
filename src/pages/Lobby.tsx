@@ -171,17 +171,33 @@ export default function Lobby({ room, playerId }: Props) {
 
           <div className="divider" />
 
-          <button
-            onClick={startGame.bind(null, room)}
-            disabled={room.playerOrder.length < 2}
-          >
-            🚀 Spiel starten
-          </button>
-          {room.playerOrder.length < 2 && (
-            <p style={{ textAlign: 'center', fontSize: 13, opacity: 0.6 }}>
-              Mindestens 2 Spieler nötig
-            </p>
-          )}
+          {(() => {
+            const deckSize = settings.deckType === 'skat' ? 32 : 52;
+            const available = deckSize * settings.guessDeckCount;
+            const pyramidCards = settings.pyramidRows * (settings.pyramidRows + 1) / 2;
+            const needed = settings.cardsPerRound * room.playerOrder.length + pyramidCards;
+            const tooFewCards = needed > available;
+            return (
+              <>
+                {tooFewCards && (
+                  <div className="feedback wrong" style={{ marginBottom: 8 }}>
+                    ⚠️ Zu wenige Karten! Brauche {needed}, habe {available}. Mehr Decks oder weniger Karten pro Runde wählen.
+                  </div>
+                )}
+                <button
+                  onClick={startGame.bind(null, room)}
+                  disabled={room.playerOrder.length < 2 || tooFewCards}
+                >
+                  🚀 Spiel starten
+                </button>
+                {room.playerOrder.length < 2 && (
+                  <p style={{ textAlign: 'center', fontSize: 13, opacity: 0.6 }}>
+                    Mindestens 2 Spieler nötig
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
 

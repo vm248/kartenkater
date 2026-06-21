@@ -36,7 +36,7 @@ export default function QuadratLobby({ room, playerId }: Props) {
 
   return (
     <div className="game-area">
-      <h1>⬛ Das Quadrat</h1>
+      <h1>🪟 Das Fenster</h1>
 
       <h2>Raum-Code</h2>
       <div className="room-code">{room.id}</div>

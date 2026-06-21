@@ -60,7 +60,7 @@ export default function QuadratGame({ room, playerId }: Props) {
       <>
         <Confetti />
         <div className="game-area">
-          <h1>⬛ Das Quadrat</h1>
+          <h1>🪟 Das Fenster</h1>
           <div className="info-box">
             <p style={{ fontSize: 24, margin: 0 }}>🎉</p>
             <p style={{ fontSize: 20, fontWeight: 700, margin: '8px 0 4px' }}>
@@ -124,7 +124,7 @@ export default function QuadratGame({ room, playerId }: Props) {
       <>
         <Confetti />
         <div className="game-area">
-          <h1>⬛ Das Quadrat</h1>
+          <h1>🪟 Das Fenster</h1>
           <div className="info-box">
             <p style={{ fontSize: 24, margin: 0 }}>🎊</p>
             <p style={{ fontSize: 20, fontWeight: 700, margin: '8px 0 4px' }}>
@@ -163,7 +163,7 @@ export default function QuadratGame({ room, playerId }: Props) {
 
   return (
     <div className="game-area">
-      <h1>⬛ Das Quadrat</h1>
+      <h1>🪟 Das Fenster</h1>
 
       {/* Turn + streak */}
       <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
