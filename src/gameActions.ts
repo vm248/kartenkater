@@ -1,7 +1,18 @@
-import { doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { GameRoom, GameSettings, Card, Player } from './types';
 import { createDeck, createPyramid, buildRevealOrder, evaluateGuess, valueToNum } from './gameLogic';
+
+async function cleanupOldRooms(): Promise<void> {
+  try {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const q = query(collection(db, 'rooms'), where('createdAt', '<', cutoff));
+    const snap = await getDocs(q);
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+  } catch {
+    // cleanup failure should not block room creation
+  }
+}
 
 function genCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -20,6 +31,7 @@ export function getPlayerId(): string {
 }
 
 export async function createRoom(playerId: string, playerName: string): Promise<string> {
+  cleanupOldRooms(); // fire and forget – löscht Räume älter als 24h
   const code = genCode();
   const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
 
