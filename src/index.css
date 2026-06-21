@@ -195,6 +195,7 @@ button.danger:hover:not(:disabled) {
   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
   border: 2px solid #ccc;
   line-height: 1.1;
+  animation: cardFlip 0.35s ease-out;
 }
 
 .card-style.red { color: #d32f2f; }
@@ -403,7 +404,67 @@ button.danger:hover:not(:disabled) {
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes cardFlip {
+  from { transform: rotateY(90deg) scale(0.8); opacity: 0; }
+  to   { transform: rotateY(0deg)  scale(1);   opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.sip-count {
+  font-size: 12px;
+  background: var(--primary);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 20px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.player-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 7px;
+  flex-shrink: 0;
+}
+
+.leave-toast {
+  background: #c0392b;
+  color: #fff;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 0.75rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+.copy-btn {
+  background: var(--card-inner);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+.copy-btn:hover { background: var(--primary); color: #fff; }
+
 @media (max-width: 480px) {
   .game-area { padding: 1.5rem 1rem; margin: 0; border-radius: 0; }
   #root { padding: 0; }
+  button { padding: 16px; min-height: 52px; }
+  .choices button { min-height: 52px; font-size: 15px; }
+  .card-style { width: 44px; height: 62px; font-size: 16px; }
+  .card-back  { width: 44px; height: 62px; }
+  .bus-grid { gap: 5px; }
 }

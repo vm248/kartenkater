@@ -21,7 +21,7 @@ export function getPlayerId(): string {
 
 export async function createRoom(playerId: string, playerName: string): Promise<string> {
   const code = genCode();
-  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
+  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now(), sips: 0 };
 
   const room: GameRoom = {
     id: code,
@@ -74,7 +74,7 @@ export async function joinRoom(
   if (room.status !== 'lobby') return { ok: false, error: 'Spiel läuft bereits.' };
   if (room.players[playerId]) return { ok: true };
 
-  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
+  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now(), sips: 0 };
   await updateDoc(ref, {
     [`players.${playerId}`]: player,
     playerOrder: [...room.playerOrder, playerId],
@@ -100,7 +100,7 @@ export async function startGame(room: GameRoom): Promise<void> {
   const deck = createDeck(room.settings, 'guess');
   const players: Record<string, Player> = {};
   for (const id of room.playerOrder) {
-    players[id] = { ...room.players[id], hand: [] };
+    players[id] = { ...room.players[id], hand: [], sips: 0 };
   }
 
   await updateDoc(doc(db, 'rooms', room.id), {
@@ -137,7 +137,7 @@ export async function makeGuess(room: GameRoom, playerId: string, guess: string)
     }
   }
 
-  await updateDoc(doc(db, 'rooms', room.id), {
+  const guessUpdate: Record<string, unknown> = {
     deck,
     [`players.${playerId}.hand`]: newHand,
     currentPlayerIndex: nextPlayerIndex,
@@ -151,7 +151,11 @@ export async function makeGuess(room: GameRoom, playerId: string, guess: string)
       step: room.currentStep,
       message,
     },
-  });
+  };
+  if (!correct) {
+    guessUpdate[`players.${playerId}.sips`] = (player.sips ?? 0) + 1;
+  }
+  await updateDoc(doc(db, 'rooms', room.id), guessUpdate);
 }
 
 export async function startPyramid(room: GameRoom, mode: 'top' | 'bottom'): Promise<void> {
@@ -316,12 +320,14 @@ export async function makeBusAnswer(room: GameRoom, guess: string): Promise<void
     if (room.busIndex === 4 && room.settings.busDifficulty === 'normal') {
       useHL = true;
     }
+    const busfahrer = room.players[room.busfahrerId!];
     await updateDoc(doc(db, 'rooms', room.id), {
       deck,
       busCards,
       awaitingContinue: true,
       lastFailedIndex: room.busIndex,
       useHigherLower: useHL,
+      [`players.${room.busfahrerId}.sips`]: (busfahrer?.sips ?? 0) + room.busIndex + 1,
     });
   }
 }
@@ -351,7 +357,7 @@ export async function reshuffleBusDeck(room: GameRoom): Promise<void> {
 export async function restartGame(room: GameRoom): Promise<void> {
   const players: Record<string, Player> = {};
   for (const id of room.playerOrder) {
-    players[id] = { ...room.players[id], hand: [] };
+    players[id] = { ...room.players[id], hand: [], sips: 0 };
   }
   await updateDoc(doc(db, 'rooms', room.id), {
     status: 'lobby',

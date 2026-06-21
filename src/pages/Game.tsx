@@ -1,6 +1,7 @@
 import type { GameRoom } from '../types';
 import CardComponent from '../components/CardComponent';
 import PyramidGrid from '../components/PyramidGrid';
+import Confetti from '../components/Confetti';
 import {
   makeGuess,
   startPyramid,
@@ -12,6 +13,7 @@ import {
   reshuffleBusDeck,
   restartGame,
 } from '../gameActions';
+import { playerColor } from '../playerColors';
 
 interface Props {
   room: GameRoom;
@@ -91,25 +93,31 @@ export default function Game({ room, playerId }: Props) {
 
         <div className="divider" />
         <h3>👥 Alle Spieler</h3>
-        {room.playerOrder.map(id => (
-          <div key={id} className="player-hand" style={{ marginBottom: 8 }}>
-            <strong style={{ fontSize: 14 }}>
-              {room.players[id]?.name}
-              {id === playerId && ' (Du)'}
-              {id === currentPlayerId && ' 👈'}
-            </strong>
-            <div className="card-row" style={{ marginTop: 6 }}>
-              {(room.players[id]?.hand ?? []).map((c, i) => (
-                id === playerId
-                  ? <CardComponent key={i} card={c} />
-                  : <CardComponent key={i} card={null} faceDown small />
-              ))}
-              {(room.players[id]?.hand ?? []).length === 0 && (
-                <span style={{ opacity: 0.4, fontSize: 13 }}>–</span>
-              )}
+        {room.playerOrder.map(id => {
+          const color = playerColor(room.playerOrder, id);
+          const sips = room.players[id]?.sips ?? 0;
+          return (
+            <div key={id} className="player-hand" style={{ marginBottom: 8, borderLeft: `3px solid ${color}` }}>
+              <strong style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="player-dot" style={{ background: color }} />
+                {room.players[id]?.name}
+                {id === playerId && ' (Du)'}
+                {id === currentPlayerId && ' 👈'}
+                {sips > 0 && <span className="sip-count">🍺 {sips}</span>}
+              </strong>
+              <div className="card-row" style={{ marginTop: 6 }}>
+                {(room.players[id]?.hand ?? []).map((c, i) => (
+                  id === playerId
+                    ? <CardComponent key={i} card={c} />
+                    : <CardComponent key={i} card={null} faceDown small />
+                ))}
+                {(room.players[id]?.hand ?? []).length === 0 && (
+                  <span style={{ opacity: 0.4, fontSize: 13 }}>–</span>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
@@ -324,25 +332,50 @@ export default function Game({ room, playerId }: Props) {
 
   // --- Finished ---
   if (status === 'finished') {
+    const sorted = [...room.playerOrder].sort(
+      (a, b) => (room.players[b]?.sips ?? 0) - (room.players[a]?.sips ?? 0)
+    );
     return (
-      <div className="game-area">
-        <h1>🚌 Busfahren</h1>
-        <div className="info-box">
-          <p style={{ fontSize: 24 }}>🎉</p>
-          <p style={{ fontSize: 20, fontWeight: 700 }}>
-            {room.busfahrerName} hat den Bus überlebt!
-          </p>
-          <p>Prost an alle! 🍻</p>
+      <>
+        <Confetti />
+        <div className="game-area">
+          <h1>🚌 Busfahren</h1>
+          <div className="info-box">
+            <p style={{ fontSize: 24 }}>🎉</p>
+            <p style={{ fontSize: 20, fontWeight: 700 }}>
+              {room.busfahrerName} hat den Bus überlebt!
+            </p>
+            <p>Prost an alle! 🍻</p>
+          </div>
+
+          <h3>🍺 Schluck-Bilanz</h3>
+          <ul className="player-list">
+            {sorted.map(id => {
+              const color = playerColor(room.playerOrder, id);
+              const sips = room.players[id]?.sips ?? 0;
+              return (
+                <li key={id}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="player-dot" style={{ background: color }} />
+                    {room.players[id]?.name}
+                    {id === playerId && ' (Du)'}
+                  </span>
+                  <span className="sip-count">🍺 {sips}</span>
+                </li>
+              );
+            })}
+          </ul>
+
+          {isHost && (
+            <button onClick={() => restartGame(room)}>
+              🔁 Nochmal spielen
+            </button>
+          )}
+          {!isHost && (
+            <div className="waiting-text">⏳ Warte auf den Host…</div>
+          )}
         </div>
-        {isHost && (
-          <button onClick={() => restartGame(room)}>
-            🔁 Nochmal spielen
-          </button>
-        )}
-        {!isHost && (
-          <div className="waiting-text">⏳ Warte auf den Host…</div>
-        )}
-      </div>
+      </>
     );
   }
 

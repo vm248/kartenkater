@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { GameRoom, GameSettings } from '../types';
 import { updateSettings, startGame, kickPlayer } from '../gameActions';
+import { playerColor } from '../playerColors';
 
 interface Props {
   room: GameRoom;
@@ -11,6 +12,23 @@ export default function Lobby({ room, playerId }: Props) {
   const isHost = room.hostId === playerId;
   const [settings, setSettings] = useState<GameSettings>(room.settings);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [leaveMsg, setLeaveMsg] = useState('');
+  const prevOrderRef = useRef<string[]>(room.playerOrder);
+  const prevPlayersRef = useRef(room.players);
+
+  useEffect(() => {
+    const prev = prevOrderRef.current;
+    const current = room.playerOrder;
+    const left = prev.filter(id => !current.includes(id));
+    if (left.length > 0) {
+      const names = left.map(id => prevPlayersRef.current[id]?.name ?? 'Jemand');
+      setLeaveMsg(`${names.join(', ')} hat den Raum verlassen.`);
+      setTimeout(() => setLeaveMsg(''), 4000);
+    }
+    prevOrderRef.current = current;
+    prevPlayersRef.current = room.players;
+  }, [room.playerOrder]);
 
   async function handleSettingsChange(partial: Partial<GameSettings>) {
     const next = { ...settings, ...partial };
@@ -20,44 +38,53 @@ export default function Lobby({ room, playerId }: Props) {
     setSaving(false);
   }
 
-  async function handleStart() {
-    await startGame(room);
-  }
-
-  async function handleKick(targetId: string) {
-    await kickPlayer(room, targetId);
+  function handleCopy() {
+    navigator.clipboard.writeText(room.id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   return (
     <div className="game-area">
       <h1>🚌 Busfahren</h1>
 
-      <h2>Raum beitreten</h2>
+      <h2>Raum-Code</h2>
       <div className="room-code">{room.id}</div>
-      <p style={{ textAlign: 'center', marginTop: 0, fontSize: 14, opacity: 0.7 }}>
-        Anderen Spielern diesen Code mitteilen
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+        <button className="copy-btn" onClick={handleCopy}>
+          {copied ? '✅ Kopiert!' : '📋 Code kopieren'}
+        </button>
+      </div>
+
+      {leaveMsg && <div className="leave-toast">🚪 {leaveMsg}</div>}
 
       <h3>👥 Spieler ({room.playerOrder.length})</h3>
       <ul className="player-list">
-        {room.playerOrder.map(id => (
-          <li key={id}>
-            <span>
-              {room.players[id]?.name}
-              {id === room.hostId && <span className="badge">Host</span>}
-              {id === playerId && <span className="badge" style={{ background: '#27ae60' }}>Du</span>}
-            </span>
-            {isHost && id !== playerId && (
-              <button
-                className="danger"
-                style={{ width: 'auto', padding: '4px 10px', fontSize: 13, margin: 0 }}
-                onClick={() => handleKick(id)}
-              >
-                ✕
-              </button>
-            )}
-          </li>
-        ))}
+        {room.playerOrder.map(id => {
+          const color = playerColor(room.playerOrder, id);
+          const sips = room.players[id]?.sips ?? 0;
+          return (
+            <li key={id}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span className="player-dot" style={{ background: color }} />
+                {room.players[id]?.name}
+                {id === room.hostId && <span className="badge">Host</span>}
+                {id === playerId && <span className="badge" style={{ background: '#27ae60' }}>Du</span>}
+                {sips > 0 && <span className="sip-count">🍺 {sips}</span>}
+              </span>
+              {isHost && id !== playerId && (
+                <button
+                  className="danger"
+                  style={{ width: 'auto', padding: '4px 10px', fontSize: 13, margin: 0 }}
+                  onClick={() => kickPlayer(room, id)}
+                >
+                  ✕
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       {isHost && (
@@ -147,7 +174,7 @@ export default function Lobby({ room, playerId }: Props) {
           <div className="divider" />
 
           <button
-            onClick={handleStart}
+            onClick={startGame.bind(null, room)}
             disabled={room.playerOrder.length < 2}
           >
             🚀 Spiel starten
