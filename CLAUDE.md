@@ -120,4 +120,3 @@ Kein CSS-Framework. Globale CSS Custom Properties in `src/index.css` für Light/
 - [ ] **Circle: Regelanzeige für Kategorie (König)**: Kategorie wird verbal genannt – könnte analog zur Damen-Regel gespeichert und angezeigt werden
 - [ ] **Firestore Security Rules absichern** vor echtem Produktiveinsatz (aktuell `allow read, write: if true`)
 - [ ] **Offline-Modus** (explizit zurückgestellt): Service Worker cacht nur Assets, keine Offline-Spiellogik
-- [ ] **Netlify Deploy**: `npm run build` → `dist/` auf Netlify drag & drop
