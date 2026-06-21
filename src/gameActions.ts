@@ -1,4 +1,4 @@
-import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import type { GameRoom, GameSettings, Card, Player } from './types';
 import { createDeck, createPyramid, buildRevealOrder, evaluateGuess, valueToNum } from './gameLogic';
@@ -58,6 +58,8 @@ export async function createRoom(playerId: string, playerName: string): Promise<
     busfahrerId: null,
     busfahrerName: null,
     tiebreakCandidates: null,
+    tiebreakOffered: null,
+    tiebreakPicks: null,
     busCards: [null, null, null, null, null],
     previousBusCards: [null, null, null, null, null],
     busIndex: 0,
@@ -106,6 +108,47 @@ export async function kickPlayer(room: GameRoom, targetId: string): Promise<void
     playerOrder: newOrder,
     players: newPlayers,
   });
+}
+
+export async function leaveRoom(room: GameRoom, playerId: string): Promise<void> {
+  const newOrder = room.playerOrder.filter(id => id !== playerId);
+  if (newOrder.length === 0) {
+    await deleteDoc(doc(db, 'rooms', room.id));
+    return;
+  }
+
+  const newPlayers = { ...room.players };
+  delete newPlayers[playerId];
+  const update: Record<string, unknown> = { playerOrder: newOrder, players: newPlayers };
+
+  if (room.hostId === playerId) {
+    update.hostId = newOrder[Math.floor(Math.random() * newOrder.length)];
+  }
+
+  if (room.status === 'phase1') {
+    const idx = room.playerOrder.indexOf(playerId);
+    let ci = room.currentPlayerIndex;
+    if (idx < ci) ci--;
+    else if (idx === ci) ci = ci % newOrder.length;
+    update.currentPlayerIndex = ci;
+  }
+
+  if (room.status === 'phase3' && room.busfahrerId === playerId) {
+    update.status = 'finished';
+  }
+
+  if (room.tiebreakCandidates?.includes(playerId)) {
+    const remaining = room.tiebreakCandidates.filter(id => id !== playerId);
+    if (remaining.length === 1) {
+      update.tiebreakCandidates = null;
+      update.busfahrerId = remaining[0];
+      update.busfahrerName = room.players[remaining[0]]?.name ?? '';
+    } else {
+      update.tiebreakCandidates = remaining;
+    }
+  }
+
+  await updateDoc(doc(db, 'rooms', room.id), update);
 }
 
 export async function startGame(room: GameRoom): Promise<void> {
@@ -235,36 +278,70 @@ export async function revealNextPyramidCard(room: GameRoom): Promise<void> {
   await updateDoc(doc(db, 'rooms', room.id), updateData);
 }
 
-export async function doTiebreak(room: GameRoom): Promise<void> {
-  const candidates = room.tiebreakCandidates ?? [];
-  const deck = [...room.deck];
-
-  if (deck.length < candidates.length) {
-    await updateDoc(doc(db, 'rooms', room.id), {
-      busfahrerId: candidates[0],
-      busfahrerName: candidates.map(id => room.players[id].name).join(' & '),
-      tiebreakCandidates: null,
-    });
-    return;
+function dealTiebreakCards(candidates: string[], deckIn: Card[]): {
+  offered: Record<string, Card[]>;
+  picks: Record<string, Card | null>;
+  deck: Card[];
+} {
+  let deck = [...deckIn];
+  const needed = candidates.length * 5;
+  if (deck.length < needed) {
+    const suits = ['♥', '♦', '♣', '♠'] as const;
+    const values = [2,3,4,5,6,7,8,9,10,'B','D','K','A'] as const;
+    const fresh: Card[] = [];
+    for (const suit of suits) for (const value of values) fresh.push({ suit, value } as Card);
+    for (let i = fresh.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [fresh[i], fresh[j]] = [fresh[j], fresh[i]];
+    }
+    deck = [...deck, ...fresh];
   }
+  const offered: Record<string, Card[]> = {};
+  const picks: Record<string, Card | null> = {};
+  for (const id of candidates) {
+    offered[id] = [deck.pop()!, deck.pop()!, deck.pop()!, deck.pop()!, deck.pop()!];
+    picks[id] = null;
+  }
+  return { offered, picks, deck };
+}
 
-  const draws = candidates.map(id => ({ id, card: deck.pop()!, val: 0 }));
-  for (const d of draws) d.val = valueToNum(d.card.value);
+export async function initTiebreak(room: GameRoom): Promise<void> {
+  const candidates = room.tiebreakCandidates!;
+  const { offered, picks, deck } = dealTiebreakCards(candidates, room.deck);
+  await updateDoc(doc(db, 'rooms', room.id), {
+    deck,
+    tiebreakOffered: offered,
+    tiebreakPicks: picks,
+  });
+}
 
-  const max = Math.max(...draws.map(d => d.val));
-  const winners = draws.filter(d => d.val === max);
+export async function pickTiebreakCard(room: GameRoom, playerId: string, card: Card): Promise<void> {
+  await updateDoc(doc(db, 'rooms', room.id), {
+    [`tiebreakPicks.${playerId}`]: card,
+  });
+}
+
+export async function resolveTiebreak(room: GameRoom): Promise<void> {
+  const candidates = room.tiebreakCandidates!;
+  const picks = room.tiebreakPicks!;
+  const maxVal = Math.max(...candidates.map(id => valueToNum(picks[id]!.value)));
+  const winners = candidates.filter(id => valueToNum(picks[id]!.value) === maxVal);
 
   if (winners.length === 1) {
     await updateDoc(doc(db, 'rooms', room.id), {
-      deck,
-      busfahrerId: winners[0].id,
-      busfahrerName: room.players[winners[0].id].name,
+      busfahrerId: winners[0],
+      busfahrerName: room.players[winners[0]].name,
       tiebreakCandidates: null,
+      tiebreakOffered: null,
+      tiebreakPicks: null,
     });
   } else {
+    const { offered, picks: newPicks, deck } = dealTiebreakCards(winners, room.deck);
     await updateDoc(doc(db, 'rooms', room.id), {
       deck,
-      tiebreakCandidates: winners.map(w => w.id),
+      tiebreakCandidates: winners,
+      tiebreakOffered: offered,
+      tiebreakPicks: newPicks,
     });
   }
 }
@@ -375,6 +452,8 @@ export async function restartGame(room: GameRoom): Promise<void> {
     busfahrerId: null,
     busfahrerName: null,
     tiebreakCandidates: null,
+    tiebreakOffered: null,
+    tiebreakPicks: null,
     busCards: [null, null, null, null, null],
     previousBusCards: [null, null, null, null, null],
     busIndex: 0,

@@ -4,7 +4,7 @@ import type { Player } from './types';
 import type { QuadratRoom, QCell } from './quadratTypes';
 import {
   createQuadratDeck, createInitialGrid, evaluateQuadratGuess,
-  ADJACENT, CELL_TYPES, ensureDeck,
+  CELL_TYPES, ensureDeck, connectedRevealedCells,
 } from './quadratLogic';
 import { getPlayerId } from './gameActions';
 
@@ -63,14 +63,24 @@ export async function joinQuadratRoom(
   const snap = await getDoc(ref);
   if (!snap.exists()) return { ok: false, error: 'Raum nicht gefunden.' };
   const room = snap.data() as QuadratRoom;
-  if (room.status !== 'lobby') return { ok: false, error: 'Spiel läuft bereits.' };
+  if (room.status === 'finished') return { ok: false, error: 'Das Spiel ist bereits beendet.' };
   if (room.players[playerId]) return { ok: true };
 
   const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
-  await updateDoc(ref, {
+  const insertAt = Math.floor(Math.random() * (room.playerOrder.length + 1));
+  const newOrder = [...room.playerOrder];
+  newOrder.splice(insertAt, 0, playerId);
+
+  const update: Record<string, unknown> = {
     [`players.${playerId}`]: player,
-    playerOrder: [...room.playerOrder, playerId],
-  });
+    playerOrder: newOrder,
+  };
+
+  if (room.status === 'playing' && insertAt <= room.currentPlayerIndex) {
+    update.currentPlayerIndex = room.currentPlayerIndex + 1;
+  }
+
+  await updateDoc(ref, update);
   return { ok: true };
 }
 
@@ -82,6 +92,36 @@ export async function kickQuadratPlayer(room: QuadratRoom, targetId: string): Pr
     playerOrder: newOrder,
     players: newPlayers,
   });
+}
+
+export async function leaveQuadratRoom(room: QuadratRoom, playerId: string): Promise<void> {
+  const newOrder = room.playerOrder.filter(id => id !== playerId);
+  if (newOrder.length === 0) {
+    await deleteDoc(doc(db, 'quadrat', room.id));
+    return;
+  }
+
+  const newPlayers = { ...room.players };
+  delete newPlayers[playerId];
+  const update: Record<string, unknown> = { playerOrder: newOrder, players: newPlayers };
+
+  if (room.hostId === playerId) {
+    update.hostId = newOrder[Math.floor(Math.random() * newOrder.length)];
+  }
+
+  if (room.status === 'playing') {
+    const idx = room.playerOrder.indexOf(playerId);
+    let ci = room.currentPlayerIndex;
+    if (idx < ci) ci--;
+    else if (idx === ci) ci = ci % newOrder.length;
+    update.currentPlayerIndex = ci;
+  }
+
+  if (room.status === 'distributing' && room.winnerId === playerId) {
+    update.status = 'finished';
+  }
+
+  await updateDoc(doc(db, 'quadrat', room.id), update);
 }
 
 export async function startQuadratGame(room: QuadratRoom): Promise<void> {
@@ -123,12 +163,6 @@ export async function makeQuadratGuess(
         sipsRemaining: 10,
         lastAction: { playerName, cellIndex, guess, correct: true, card, drinkCount: 0 },
       });
-    } else if (newStreak >= 3) {
-      const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
-      await updateDoc(doc(db, 'quadrat', room.id), {
-        grid, streak: 0, currentPlayerIndex: nextIndex,
-        lastAction: { playerName, cellIndex, guess, correct: true, card, drinkCount: 0 },
-      });
     } else {
       await updateDoc(doc(db, 'quadrat', room.id), {
         grid, streak: newStreak,
@@ -136,7 +170,7 @@ export async function makeQuadratGuess(
       });
     }
   } else {
-    const toRemove = [cellIndex, ...ADJACENT[cellIndex].filter(i => grid[i].revealed)];
+    const toRemove = connectedRevealedCells(cellIndex, grid);
     const drinkCount = toRemove.length;
 
     let { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
@@ -177,6 +211,15 @@ export async function restartQuadratGame(room: QuadratRoom): Promise<void> {
     lastAction: null,
     winnerId: null, winnerName: null,
     sipsRemaining: 0, sipsGiven: {},
+  });
+}
+
+export async function passQuadratTurn(room: QuadratRoom): Promise<void> {
+  const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
+  await updateDoc(doc(db, 'quadrat', room.id), {
+    currentPlayerIndex: nextIndex,
+    streak: 0,
+    lastAction: null,
   });
 }
 

@@ -110,6 +110,22 @@ export function evaluateQuadratGuess(guess: string, cellIndex: number, grid: QCe
   return false;
 }
 
+export function connectedRevealedCells(startIndex: number, grid: QCell[]): number[] {
+  const toRemove = new Set<number>([startIndex]);
+  const queue = (ADJACENT[startIndex] ?? []).filter(i => grid[i].revealed && grid[i].type !== null);
+  for (let i = 0; i < queue.length; i++) {
+    const pos = queue[i];
+    if (toRemove.has(pos)) continue;
+    toRemove.add(pos);
+    for (const adj of ADJACENT[pos] ?? []) {
+      if (!toRemove.has(adj) && grid[adj].revealed && grid[adj].type !== null) {
+        queue.push(adj);
+      }
+    }
+  }
+  return [...toRemove];
+}
+
 export function ensureDeck(deck: Card[], discard: Card[], needed: number): { deck: Card[]; discard: Card[] } {
   if (deck.length >= needed) return { deck, discard };
   const combined = shuffleDeck([...deck, ...discard]);

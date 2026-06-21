@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { QuadratRoom, QCell } from '../quadratTypes';
 import { isAvailable, COMPARISON, CELL_TYPES } from '../quadratLogic';
-import { makeQuadratGuess, giveSip, finishSipDistribution, restartQuadratGame } from '../quadratActions';
+import { makeQuadratGuess, giveSip, finishSipDistribution, restartQuadratGame, passQuadratTurn } from '../quadratActions';
 import { playerColor } from '../playerColors';
 import CardComponent from '../components/CardComponent';
 import Confetti from '../components/Confetti';
@@ -49,6 +49,7 @@ function ComparisonDisplay({ cell, grid }: { cell: QCell; grid: QCell[] }) {
 export default function QuadratGame({ room, playerId }: Props) {
   const [selectedCell, setSelectedCell] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [passPopup, setPassPopup] = useState(false);
 
   const { status, grid, currentPlayerIndex, playerOrder, streak, lastAction, players } = room;
   const isHost = room.hostId === playerId;
@@ -61,6 +62,9 @@ export default function QuadratGame({ room, playerId }: Props) {
         <Confetti />
         <div className="game-area">
           <h1>🪟 Das Fenster</h1>
+          <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
+            {room.id}
+          </p>
           <div className="info-box">
             <p style={{ fontSize: 24, margin: 0 }}>🎉</p>
             <p style={{ fontSize: 20, fontWeight: 700, margin: '8px 0 4px' }}>
@@ -125,6 +129,9 @@ export default function QuadratGame({ room, playerId }: Props) {
         <Confetti />
         <div className="game-area">
           <h1>🪟 Das Fenster</h1>
+          <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
+            {room.id}
+          </p>
           <div className="info-box">
             <p style={{ fontSize: 24, margin: 0 }}>🎊</p>
             <p style={{ fontSize: 20, fontWeight: 700, margin: '8px 0 4px' }}>
@@ -161,21 +168,50 @@ export default function QuadratGame({ room, playerId }: Props) {
 
   const selectedCellData = selectedCell !== null ? grid[selectedCell] : null;
 
+  async function handlePass() {
+    setLoading(true);
+    await passQuadratTurn(room);
+    setPassPopup(false);
+    setLoading(false);
+  }
+
   return (
     <div className="game-area">
+      {passPopup && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+          <div style={{
+            background: 'var(--card)', borderRadius: 18, padding: '28px 32px',
+            textAlign: 'center', maxWidth: 300, width: '90%',
+          }}>
+            <p style={{ fontSize: 36, margin: '0 0 8px' }}>🍺</p>
+            <p style={{ fontSize: 20, fontWeight: 700, margin: '0 0 6px' }}>
+              Verteile {streak} Schlück{streak === 1 ? '' : 'e'}!
+            </p>
+            <p style={{ opacity: 0.6, fontSize: 14, margin: '0 0 20px' }}>
+              Sag deinen Mitspielern wer trinken muss.
+            </p>
+            <button onClick={handlePass} disabled={loading}>Fertig</button>
+          </div>
+        </div>
+      )}
       <h1>🪟 Das Fenster</h1>
+      <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
+        {room.id}
+      </p>
 
       {/* Turn + streak */}
       <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
         <h2 style={{ margin: 0 }}>
           {isMyTurn ? '👉 Du bist dran!' : `⏳ ${players[currentPlayerId]?.name}…`}
         </h2>
-        <div style={{ marginTop: 6, fontSize: 22, letterSpacing: 4 }}>
-          {'✅'.repeat(streak)}{'⬜'.repeat(3 - streak)}
-          <span style={{ fontSize: 13, opacity: 0.6, marginLeft: 8, letterSpacing: 0 }}>
-            {streak}/3
-          </span>
-        </div>
+        {streak > 0 && (
+          <div style={{ marginTop: 6, fontSize: 14, opacity: 0.8 }}>
+            🍺 {streak} Schlück{streak === 1 ? '' : 'e'} zum Weitergeben
+          </div>
+        )}
       </div>
 
       {/* Last action feedback */}
@@ -265,9 +301,21 @@ export default function QuadratGame({ room, playerId }: Props) {
       )}
 
       {isMyTurn && !selectedCellData && (
-        <p style={{ textAlign: 'center', opacity: 0.6, fontSize: 14 }}>
-          Tippe auf eine verfügbare Karte (leuchtendes Blau)
-        </p>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ opacity: 0.6, fontSize: 14, margin: '0 0 8px' }}>
+            Tippe auf eine verfügbare Karte (leuchtendes Blau)
+          </p>
+          {streak >= 1 && (
+            <button
+              className="secondary"
+              onClick={() => setPassPopup(true)}
+              disabled={loading}
+              style={{ width: 'auto', padding: '8px 20px' }}
+            >
+              Weitergeben ({streak} Schlück{streak === 1 ? '' : 'e'} verteilen)
+            </button>
+          )}
+        </div>
       )}
 
       {/* Player list */}

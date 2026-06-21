@@ -6,7 +6,9 @@ import {
   makeGuess,
   startPyramid,
   revealNextPyramidCard,
-  doTiebreak,
+  initTiebreak,
+  pickTiebreakCard,
+  resolveTiebreak,
   startBusfahren,
   makeBusAnswer,
   continueAfterBusFail,
@@ -185,47 +187,128 @@ export default function Game({ room, playerId }: Props) {
 
   // --- Results: Busfahrer ermitteln ---
   if (status === 'results') {
-    const hasTiebreak = room.tiebreakCandidates && room.tiebreakCandidates.length > 0;
+    const candidates = room.tiebreakCandidates ?? [];
+    const offered = room.tiebreakOffered;
+    const picks = room.tiebreakPicks;
+    const iAmCandidate = candidates.includes(playerId);
+    const myPick = picks?.[playerId] ?? null;
+    const allPicked = candidates.length > 0 && candidates.every(id => picks?.[id] != null);
+
+    let winnerIds: string[] = [];
+    if (allPicked && picks) {
+      const maxVal = Math.max(...candidates.map(id => {
+        const c = picks[id];
+        return c ? (typeof c.value === 'number' ? c.value : { B: 11, D: 12, K: 13, A: 14 }[c.value as string] ?? 0) : 0;
+      }));
+      winnerIds = candidates.filter(id => {
+        const c = picks[id];
+        if (!c) return false;
+        const v = typeof c.value === 'number' ? c.value : { B: 11, D: 12, K: 13, A: 14 }[c.value as string] ?? 0;
+        return v === maxVal;
+      });
+    }
 
     return (
       <div className="game-area">
         <h1>🚌 Busfahren</h1>
         <h2>🚍 Busfahrer-Ermittlung</h2>
 
-        <div className="info-box">
-          {room.busfahrerName && !hasTiebreak ? (
-            <>
-              <p style={{ fontSize: 20, fontWeight: 700 }}>
-                {room.busfahrerName === room.players[playerId]?.name
-                  ? '😱 Du musst Busfahren!'
-                  : `🚌 ${room.busfahrerName} muss Busfahren!`}
-              </p>
-            </>
-          ) : hasTiebreak ? (
-            <>
-              <p>Gleichstand! Stechen zwischen:</p>
-              <p style={{ fontWeight: 700 }}>
-                {room.tiebreakCandidates!.map(id => room.players[id]?.name).join(' & ')}
-              </p>
-              {isHost && (
-                <button onClick={() => doTiebreak(room)}>🎲 Stechen durchführen</button>
-              )}
-            </>
-          ) : (
-            <p>Wird ermittelt…</p>
-          )}
-        </div>
+        {/* No tiebreak – winner known */}
+        {!candidates.length && room.busfahrerName && (
+          <div className="info-box">
+            <p style={{ fontSize: 20, fontWeight: 700 }}>
+              {room.busfahrerId === playerId
+                ? '😱 Du musst Busfahren!'
+                : `🚌 ${room.busfahrerName} muss Busfahren!`}
+            </p>
+          </div>
+        )}
+        {!candidates.length && room.busfahrerName && (
+          isHost
+            ? <button onClick={() => startBusfahren(room)}>🚌 Busfahren starten</button>
+            : <div className="waiting-text">⏳ Warte auf den Host…</div>
+        )}
 
-        {room.busfahrerName && !hasTiebreak && (
-          <>
-            {isHost ? (
-              <button onClick={() => startBusfahren(room)}>
-                🚌 Busfahren starten
-              </button>
-            ) : (
-              <div className="waiting-text">⏳ Warte auf den Host…</div>
+        {/* Tiebreak: not yet started */}
+        {candidates.length > 0 && !offered && (
+          <div className="info-box">
+            <p style={{ fontWeight: 700, fontSize: 16 }}>
+              Gleichstand! Stechen zwischen: {candidates.map(id => room.players[id]?.name).join(' & ')}
+            </p>
+            {isHost
+              ? <button style={{ marginTop: 8 }} onClick={() => initTiebreak(room)}>🃏 Stechen starten</button>
+              : <div className="waiting-text" style={{ marginTop: 8 }}>⏳ Warte auf den Host…</div>}
+          </div>
+        )}
+
+        {/* Tiebreak: picking phase */}
+        {candidates.length > 0 && offered && !allPicked && (
+          <div className="info-box">
+            <p style={{ fontWeight: 700, fontSize: 15, margin: '0 0 10px' }}>
+              🃏 Stechen – {candidates.map(id => room.players[id]?.name).join(' & ')}
+            </p>
+            {iAmCandidate && !myPick && (
+              <>
+                <p style={{ opacity: 0.7, fontSize: 13, margin: '0 0 10px' }}>Wähle eine Karte:</p>
+                <div className="card-row" style={{ justifyContent: 'center', gap: 8 }}>
+                  {offered[playerId]?.map((card, i) => (
+                    <div
+                      key={i}
+                      onClick={() => pickTiebreakCard(room, playerId, card)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <CardComponent card={null} faceDown />
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
-          </>
+            {iAmCandidate && myPick && (
+              <>
+                <p style={{ opacity: 0.7, fontSize: 13, margin: '0 0 6px' }}>Du hast gezogen:</p>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                  <CardComponent card={myPick} />
+                </div>
+              </>
+            )}
+            <div style={{ marginTop: 8 }}>
+              {candidates.map(id => (
+                <span key={id} style={{ fontSize: 13, opacity: 0.7, marginRight: 12 }}>
+                  {room.players[id]?.name}: {picks?.[id] ? '✅' : '⏳'}
+                </span>
+              ))}
+            </div>
+            {!iAmCandidate && (
+              <div className="waiting-text" style={{ marginTop: 8 }}>⏳ Spieler ziehen ihre Karten…</div>
+            )}
+          </div>
+        )}
+
+        {/* Tiebreak: all picked – reveal */}
+        {candidates.length > 0 && offered && allPicked && picks && (
+          <div className="info-box">
+            <p style={{ fontWeight: 700, fontSize: 16, margin: '0 0 12px' }}>
+              {winnerIds.length === 1
+                ? `🎯 ${room.players[winnerIds[0]]?.name} hat die höchste Karte und muss fahren!`
+                : `🤝 Gleichstand! Neues Stechen zwischen: ${winnerIds.map(id => room.players[id]?.name).join(' & ')}`}
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 12 }}>
+              {candidates.map(id => (
+                <div key={id} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: playerColor(room.playerOrder, id) }}>
+                    {room.players[id]?.name}
+                  </div>
+                  <CardComponent card={picks[id]} />
+                </div>
+              ))}
+            </div>
+            {isHost && (
+              <button onClick={() => resolveTiebreak(room)}>
+                {winnerIds.length === 1 ? '✅ Busfahrer bestätigen' : '🔄 Neues Stechen'}
+              </button>
+            )}
+            {!isHost && <div className="waiting-text">⏳ Warte auf den Host…</div>}
+          </div>
         )}
 
         <div className="divider" />

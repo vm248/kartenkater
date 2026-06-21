@@ -12,6 +12,7 @@ export default function QuadratLobby({ room, playerId }: Props) {
   const isHost = room.hostId === playerId;
   const [copied, setCopied] = useState(false);
   const [leaveMsg, setLeaveMsg] = useState('');
+  const [showRules, setShowRules] = useState(false);
   const prevOrderRef = useRef<string[]>(room.playerOrder);
   const prevPlayersRef = useRef(room.players);
 
@@ -78,11 +79,60 @@ export default function QuadratLobby({ room, playerId }: Props) {
 
       <div className="info-box" style={{ marginBottom: '1rem', fontSize: 13 }}>
         <p style={{ margin: 0, fontWeight: 600 }}>Kurzregeln</p>
-        <p style={{ margin: '6px 0 0', opacity: 0.8, lineHeight: 1.5 }}>
-          20 Karten im Quadrat. 3 richtig hintereinander → nächster Spieler.<br />
-          Falsch → trinken (falsche Karte + alle angrenzenden offenen) → nächster Spieler.<br />
-          Wer das Quadrat beendet, verteilt 10 Schlücke.
+        <p style={{ margin: '6px 0 0', opacity: 0.8, lineHeight: 1.6 }}>
+          20 Karten im 5×5-Fenster. Du bleibst dran solange du richtig rätst.<br />
+          Ab 1 Richtigem kannst du freiwillig weitergeben und Schlücke verteilen.<br />
+          Falsch geraten → trinken + nächster Spieler.<br />
+          Wer alle 20 Karten aufdeckt, verteilt 10 Schlücke.
         </p>
+        <button
+          className="secondary"
+          onClick={() => setShowRules(r => !r)}
+          style={{ width: 'auto', padding: '6px 14px', marginTop: 10, fontSize: 13 }}
+        >
+          {showRules ? 'Regeln ausblenden ▲' : 'Ausführliche Regeln ▼'}
+        </button>
+
+        {showRules && (
+          <div style={{ marginTop: 12, lineHeight: 1.6, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🗂️ Das Spielfeld</p>
+            <p style={{ margin: '0 0 10px', opacity: 0.85 }}>
+              Das Fenster ist ein 5×5-Raster mit 20 Karten (5 Felder bleiben leer).
+              Die 4 <strong>Eckkarten (C)</strong> sind von Anfang an aufgedeckt und dienen als Vergleichskarten.
+              Verfügbare Karten leuchten blau – du tippst drauf und rätst.
+            </p>
+
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🃏 Kartentypen & Ratmechanik</p>
+            <p style={{ margin: '0 0 4px', opacity: 0.85 }}>
+              <strong>Seitenkarten (S)</strong> – direkt neben den Ecken, sofort verfügbar.<br />
+              Rate: <em>höher / tiefer / gleich</em> als die benachbarte Eckkarte.
+            </p>
+            <p style={{ margin: '0 0 4px', opacity: 0.85 }}>
+              <strong>Mittenkarten (M)</strong> – in der Mitte der Außenseiten, verfügbar wenn beide benachbarten Seitenkarten aufgedeckt sind.<br />
+              Rate: <em>innerhalb / außerhalb</em> der zwei Seitenkarten. Genau auf der Grenze = falsch.
+            </p>
+            <p style={{ margin: '0 0 10px', opacity: 0.85 }}>
+              <strong>Innenkarten (I)</strong> – zwischen den Mittenkarten, verfügbar wenn die benachbarte Mittenkarte aufgedeckt ist.<br />
+              Rate: <em>höher / tiefer</em> als die benachbarte Mittenkarte. Gleicher Wert = falsch.
+            </p>
+
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🔄 Zugablauf</p>
+            <p style={{ margin: '0 0 4px', opacity: 0.85 }}>
+              <strong>Richtig geraten:</strong> Karte wird aufgedeckt, du bleibst dran und kannst weitermachen oder freiwillig weitergeben.
+            </p>
+            <p style={{ margin: '0 0 4px', opacity: 0.85 }}>
+              <strong>Weitergeben (ab 1 Richtigem):</strong> Du gibst deinen Zug ab und darfst so viele Schlücke verteilen, wie du in diesem Zug richtig geraten hast.
+            </p>
+            <p style={{ margin: '0 0 10px', opacity: 0.85 }}>
+              <strong>Falsch geraten:</strong> Die falsche Karte + alle direkt benachbarten aufgedeckten Karten werden entfernt und durch neue ersetzt. Du musst so viele Schlücke trinken wie Karten entfernt wurden. Dann ist der nächste Spieler dran.
+            </p>
+
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🏆 Spielende</p>
+            <p style={{ margin: 0, opacity: 0.85 }}>
+              Wer alle 20 Karten aufdeckt, gewinnt das Fenster und darf <strong>10 Schlücke</strong> frei unter allen anderen Spielern verteilen.
+            </p>
+          </div>
+        )}
       </div>
 
       {isHost && (

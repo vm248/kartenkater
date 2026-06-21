@@ -8,9 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Trinkspiele',
-        short_name: 'Trinkspiele',
-        description: 'Multiplayer Trinkspiele',
+        name: 'Kartenkater',
+        short_name: 'Kartenkater',
+        description: 'Multiplayer Trinkkartenspiele',
         theme_color: '#007acc',
         background_color: '#101820',
         display: 'standalone',

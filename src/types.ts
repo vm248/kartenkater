@@ -61,6 +61,8 @@ export interface GameRoom {
   busfahrerId: string | null;
   busfahrerName: string | null;
   tiebreakCandidates: string[] | null;
+  tiebreakOffered: Record<string, Card[]> | null;
+  tiebreakPicks: Record<string, Card | null> | null;
   busCards: (Card | null)[];
   previousBusCards: (Card | null)[];
   busIndex: number;

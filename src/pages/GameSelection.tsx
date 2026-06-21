@@ -24,7 +24,7 @@ const GAMES = [
 export default function GameSelection({ onSelect }: Props) {
   return (
     <div className="game-area">
-      <h1 style={{ textAlign: 'center', marginBottom: 4 }}>🍻 Trinkspiele</h1>
+      <h1 style={{ textAlign: 'center', marginBottom: 4 }}>🐱 Kartenkater</h1>
       <p style={{ textAlign: 'center', opacity: 0.5, fontSize: 14, marginBottom: 24 }}>
         Wähle ein Spiel aus
       </p>

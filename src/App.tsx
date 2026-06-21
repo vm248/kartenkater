@@ -3,7 +3,8 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import type { GameRoom } from './types';
 import type { QuadratRoom } from './quadratTypes';
-import { getPlayerId } from './gameActions';
+import { getPlayerId, leaveRoom } from './gameActions';
+import { leaveQuadratRoom } from './quadratActions';
 import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
@@ -28,6 +29,7 @@ export default function App() {
   const [dark, setDark] = useState(
     () => localStorage.getItem('busfahren_dark') === '1'
   );
+  const [popupCopied, setPopupCopied] = useState(false);
 
   const playerId = getPlayerId();
 
@@ -92,11 +94,31 @@ export default function App() {
     setSelectedGame(null);
   }
 
+  async function handleUserLeave() {
+    if (room) await leaveRoom(room, playerId);
+    if (quadratRoom) await leaveQuadratRoom(quadratRoom, playerId);
+    handleLeave();
+  }
+
   const inRoom = roomId || quadratRoomId;
   const showLobby = room && room.status === 'lobby';
   const showGame = room && room.status !== 'lobby';
   const showQuadratLobby = quadratRoom && quadratRoom.status === 'lobby';
   const showQuadratGame = quadratRoom && quadratRoom.status !== 'lobby';
+
+  const activeRoom = (room && room.status !== 'lobby' && room.status !== 'finished') ? room : null;
+  const activeQuadrat = (quadratRoom && quadratRoom.status !== 'lobby' && quadratRoom.status !== 'finished') ? quadratRoom : null;
+  const tooFewPlayers =
+    (activeRoom && activeRoom.playerOrder.length < 2) ||
+    (activeQuadrat && activeQuadrat.playerOrder.length < 2);
+  const popupCode = activeRoom?.id ?? activeQuadrat?.id ?? '';
+
+  function handlePopupCopy() {
+    navigator.clipboard.writeText(popupCode).then(() => {
+      setPopupCopied(true);
+      setTimeout(() => setPopupCopied(false), 2000);
+    });
+  }
 
   return (
     <>
@@ -112,7 +134,7 @@ export default function App() {
         {(selectedGame || inRoom) && (
           <button
             className="icon-btn"
-            onClick={handleLeave}
+            onClick={handleUserLeave}
             title="Hauptmenü"
             style={{ background: 'var(--card)', borderRadius: 8, padding: '6px 10px' }}
           >
@@ -120,6 +142,34 @@ export default function App() {
           </button>
         )}
       </div>
+
+      {tooFewPlayers && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+        }}>
+          <div style={{
+            background: 'var(--card)', borderRadius: 18, padding: '28px 28px 24px',
+            textAlign: 'center', maxWidth: 320, width: '90%',
+          }}>
+            <p style={{ fontSize: 32, margin: '0 0 6px' }}>👋</p>
+            <p style={{ fontSize: 18, fontWeight: 700, margin: '0 0 6px' }}>Zu wenige Spieler</p>
+            <p style={{ opacity: 0.65, fontSize: 14, margin: '0 0 16px' }}>
+              Teile den Code und warte, bis jemand beitritt.
+            </p>
+            <div className="room-code" style={{ margin: '0 0 10px' }}>{popupCode}</div>
+            <button className="copy-btn" onClick={handlePopupCopy} style={{ marginBottom: 16 }}>
+              {popupCopied ? '✅ Kopiert!' : '📋 Code kopieren'}
+            </button>
+            <button
+              onClick={handleUserLeave}
+              style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', width: '100%' }}
+            >
+              Hauptmenü
+            </button>
+          </div>
+        </div>
+      )}
 
       {!inRoom && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
       {!inRoom && selectedGame === 'busfahren' && (
