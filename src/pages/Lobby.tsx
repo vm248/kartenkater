@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Bus, Copy, Check, Link, LogOut, Play, AlertTriangle } from 'lucide-react';
 import type { GameRoom, GameSettings } from '../types';
 import { updateSettings, startGame, kickPlayer } from '../gameActions';
 import { playerColor } from '../playerColors';
@@ -60,22 +61,26 @@ export default function Lobby({ room, playerId }: Props) {
 
   return (
     <div className="game-area">
-      <h1>🚌 Busfahren</h1>
+      <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
 
       <h2>Raum-Code</h2>
       <div className="room-code">{room.id}</div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: '1rem' }}>
         <button className="copy-btn" onClick={handleCopy}>
-          {copied ? '✅ Kopiert!' : '📋 Code kopieren'}
+          {copied ? <><Check size={13} strokeWidth={2.5} /> Kopiert!</> : <><Copy size={13} /> Code kopieren</>}
         </button>
         <button className="copy-btn" onClick={handleShareLink}>
-          {linkCopied ? '✅ Link kopiert!' : '🔗 Link teilen'}
+          {linkCopied ? <><Check size={13} strokeWidth={2.5} /> Link kopiert!</> : <><Link size={13} /> Link teilen</>}
         </button>
       </div>
 
-      {leaveMsg && <div className="leave-toast">🚪 {leaveMsg}</div>}
+      {leaveMsg && (
+        <div className="leave-toast" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <LogOut size={14} strokeWidth={2} /> {leaveMsg}
+        </div>
+      )}
 
-      <h3>👥 Spieler ({room.playerOrder.length})</h3>
+      <h3>Spieler ({room.playerOrder.length})</h3>
       <ul className="player-list">
         {room.playerOrder.map(id => {
           const color = playerColor(room.playerOrder, id);
@@ -104,9 +109,9 @@ export default function Lobby({ room, playerId }: Props) {
       {isHost && (
         <>
           <div className="divider" />
-          <h3>⚙️ Einstellungen {saving && <span style={{ fontSize: 12, opacity: 0.6 }}>Speichert…</span>}</h3>
+          <h3>Einstellungen {saving && <span style={{ fontSize: 12, opacity: 0.6, textTransform: 'none', letterSpacing: 0 }}>Speichert…</span>}</h3>
 
-          <label>🃏 Kartendeck</label>
+          <label>Kartendeck</label>
           <div className="radio-group" style={{ flexDirection: 'row', gap: 20, marginBottom: '1rem' }}>
             <label>
               <input
@@ -127,7 +132,7 @@ export default function Lobby({ room, playerId }: Props) {
           </div>
 
           <div className="settings-row">
-            <label>🎴 Karten pro Runde (1–4)</label>
+            <label>Karten pro Runde (1–4)</label>
             <input
               type="number"
               min={1} max={4}
@@ -137,7 +142,7 @@ export default function Lobby({ room, playerId }: Props) {
           </div>
 
           <div className="settings-row">
-            <label>🗂️ Decks (Raten & Pyramide)</label>
+            <label>Decks (Raten & Pyramide)</label>
             <input
               type="number"
               min={1} max={3}
@@ -147,7 +152,7 @@ export default function Lobby({ room, playerId }: Props) {
           </div>
 
           <div className="settings-row">
-            <label>🏗️ Pyramide (3–6 Reihen)</label>
+            <label>Pyramide (3–6 Reihen)</label>
             <input
               type="number"
               min={3} max={6}
@@ -157,7 +162,7 @@ export default function Lobby({ room, playerId }: Props) {
           </div>
 
           <div className="settings-row">
-            <label>🔁 Decks (Busfahren)</label>
+            <label>Decks (Busfahren)</label>
             <input
               type="number"
               min={1} max={3}
@@ -166,7 +171,7 @@ export default function Lobby({ room, playerId }: Props) {
             />
           </div>
 
-          <label>🥴 Schwierigkeit Busfahren</label>
+          <label>Schwierigkeit Busfahren</label>
           <div className="radio-group">
             <label>
               <input type="radio" checked={settings.busDifficulty === 'easy'}
@@ -196,15 +201,16 @@ export default function Lobby({ room, playerId }: Props) {
             return (
               <>
                 {tooFewCards && (
-                  <div className="feedback wrong" style={{ marginBottom: 8 }}>
-                    ⚠️ Zu wenige Karten! Brauche {needed}, habe {available}. Mehr Decks oder weniger Karten pro Runde wählen.
+                  <div className="feedback wrong" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <AlertTriangle size={15} strokeWidth={2} />
+                    Zu wenige Karten! Brauche {needed}, habe {available}. Mehr Decks oder weniger Karten pro Runde wählen.
                   </div>
                 )}
                 <button
                   onClick={startGame.bind(null, room)}
                   disabled={room.playerOrder.length < 2 || tooFewCards}
                 >
-                  🚀 Spiel starten
+                  <Play size={16} strokeWidth={2} /> Spiel starten
                 </button>
                 {room.playerOrder.length < 2 && (
                   <p style={{ textAlign: 'center', fontSize: 13, opacity: 0.6 }}>
@@ -218,7 +224,7 @@ export default function Lobby({ room, playerId }: Props) {
       )}
 
       {!isHost && (
-        <div className="waiting-text">⏳ Warte auf den Host…</div>
+        <div className="waiting-text">Warte auf den Host…</div>
       )}
     </div>
   );

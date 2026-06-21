@@ -47,9 +47,32 @@ export async function createQuadratRoom(playerId: string, playerName: string): P
     winnerName: null,
     sipsRemaining: 0,
     sipsGiven: {},
+    awaitingDrinkConfirm: false,
     createdAt: Date.now(),
   };
 
+  await setDoc(doc(db, 'quadrat', code), room);
+  return code;
+}
+
+export async function createLocalQuadratRoom(players: { id: string; name: string }[]): Promise<string> {
+  cleanupOldQuadratRooms();
+  const code = genCode();
+  const playerMap: Record<string, Player> = {};
+  const playerOrder: string[] = [];
+  for (const p of players) {
+    playerMap[p.id] = { id: p.id, name: p.name, hand: [], joinedAt: Date.now() };
+    playerOrder.push(p.id);
+  }
+  const room: QuadratRoom = {
+    id: code, status: 'lobby', hostId: players[0].id,
+    players: playerMap, playerOrder,
+    grid: [], deck: [], discard: [],
+    currentPlayerIndex: 0, streak: 0,
+    lastAction: null, winnerId: null, winnerName: null,
+    sipsRemaining: 0, sipsGiven: {}, awaitingDrinkConfirm: false,
+    createdAt: Date.now(),
+  };
   await setDoc(doc(db, 'quadrat', code), room);
   return code;
 }
@@ -63,24 +86,18 @@ export async function joinQuadratRoom(
   const snap = await getDoc(ref);
   if (!snap.exists()) return { ok: false, error: 'Raum nicht gefunden.' };
   const room = snap.data() as QuadratRoom;
-  if (room.status === 'finished') return { ok: false, error: 'Das Spiel ist bereits beendet.' };
   if (room.players[playerId]) return { ok: true };
+  if (room.status !== 'lobby') return { ok: false, error: 'Spiel läuft bereits.' };
 
   const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
   const insertAt = Math.floor(Math.random() * (room.playerOrder.length + 1));
   const newOrder = [...room.playerOrder];
   newOrder.splice(insertAt, 0, playerId);
 
-  const update: Record<string, unknown> = {
+  await updateDoc(ref, {
     [`players.${playerId}`]: player,
     playerOrder: newOrder,
-  };
-
-  if (room.status === 'playing' && insertAt <= room.currentPlayerIndex) {
-    update.currentPlayerIndex = room.currentPlayerIndex + 1;
-  }
-
-  await updateDoc(ref, update);
+  });
   return { ok: true };
 }
 
@@ -115,6 +132,23 @@ export async function leaveQuadratRoom(room: QuadratRoom, playerId: string): Pro
     if (idx < ci) ci--;
     else if (idx === ci) ci = ci % newOrder.length;
     update.currentPlayerIndex = ci;
+
+    // If the leaving player was the wrong-guesser waiting to confirm, clean up the revealed card
+    if (room.awaitingDrinkConfirm && idx === room.currentPlayerIndex && room.lastAction) {
+      const gridCopy: QCell[] = room.grid.map(c => ({ ...c }));
+      const toRemove = connectedRevealedCells(room.lastAction.cellIndex, gridCopy);
+      let { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
+      for (const pos of toRemove) {
+        discard.push(gridCopy[pos].card!);
+        const replacement = deck.pop()!;
+        const type = CELL_TYPES[pos];
+        gridCopy[pos] = { index: pos, type, card: replacement, revealed: type === 'C' };
+      }
+      update.grid = gridCopy;
+      update.deck = deck;
+      update.discard = discard;
+      update.awaitingDrinkConfirm = false;
+    }
   }
 
   if (room.status === 'distributing' && room.winnerId === playerId) {
@@ -170,24 +204,35 @@ export async function makeQuadratGuess(
       });
     }
   } else {
-    const toRemove = connectedRevealedCells(cellIndex, grid);
-    const drinkCount = toRemove.length;
-
-    let { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
-
-    for (const pos of toRemove) {
-      discard.push(grid[pos].card!);
-      const replacement = deck.pop()!;
-      const type = CELL_TYPES[pos];
-      grid[pos] = { index: pos, type, card: replacement, revealed: type === 'C' };
-    }
-
-    const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
+    // Reveal wrong card so everyone can see it, but don't replace yet
+    grid[cellIndex] = { ...grid[cellIndex], revealed: true };
+    const drinkCount = connectedRevealedCells(cellIndex, grid).length;
     await updateDoc(doc(db, 'quadrat', room.id), {
-      grid, deck, discard, streak: 0, currentPlayerIndex: nextIndex,
+      grid, streak: 0, awaitingDrinkConfirm: true,
       lastAction: { playerName, cellIndex, guess, correct: false, card, drinkCount },
     });
   }
+}
+
+export async function confirmQuadratDrink(room: QuadratRoom): Promise<void> {
+  if (!room.lastAction) return;
+  const grid: QCell[] = room.grid.map(c => ({ ...c }));
+  const toRemove = connectedRevealedCells(room.lastAction.cellIndex, grid);
+
+  let { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
+  for (const pos of toRemove) {
+    discard.push(grid[pos].card!);
+    const replacement = deck.pop()!;
+    const type = CELL_TYPES[pos];
+    grid[pos] = { index: pos, type, card: replacement, revealed: type === 'C' };
+  }
+
+  const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
+  await updateDoc(doc(db, 'quadrat', room.id), {
+    grid, deck, discard,
+    currentPlayerIndex: nextIndex,
+    awaitingDrinkConfirm: false,
+  });
 }
 
 export async function giveSip(room: QuadratRoom, targetId: string): Promise<void> {
@@ -211,10 +256,12 @@ export async function restartQuadratGame(room: QuadratRoom): Promise<void> {
     lastAction: null,
     winnerId: null, winnerName: null,
     sipsRemaining: 0, sipsGiven: {},
+    awaitingDrinkConfirm: false,
   });
 }
 
 export async function passQuadratTurn(room: QuadratRoom): Promise<void> {
+  if (room.awaitingDrinkConfirm) return;
   const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
   await updateDoc(doc(db, 'quadrat', room.id), {
     currentPlayerIndex: nextIndex,

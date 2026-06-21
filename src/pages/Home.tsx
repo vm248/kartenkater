@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { createRoom, joinRoom, getPlayerId } from '../gameActions';
+import { Bus, Plus, LogIn, Monitor, X, Play } from 'lucide-react';
+import { createRoom, joinRoom, createLocalRoom, getPlayerId } from '../gameActions';
 
 interface Props {
-  onJoined: (roomId: string) => void;
+  onJoined: (roomId: string, localPlayerIds?: string[]) => void;
   onBack: () => void;
   initialCode?: string;
 }
@@ -12,6 +13,11 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
   const [code, setCode] = useState(initialCode ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [localSetup, setLocalSetup] = useState(false);
+  const [localPlayers, setLocalPlayers] = useState([
+    { id: getPlayerId(), name: localStorage.getItem('busfahren_name') ?? '' },
+    { id: crypto.randomUUID(), name: '' },
+  ]);
 
   const playerId = getPlayerId();
 
@@ -27,7 +33,7 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
     try {
       const roomId = await createRoom(playerId, name.trim());
       onJoined(roomId);
-    } catch (e) {
+    } catch {
       setError('Fehler beim Erstellen. Bitte nochmal versuchen.');
     }
     setLoading(false);
@@ -45,21 +51,93 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
       } else {
         setError(result.error ?? 'Unbekannter Fehler.');
       }
-    } catch (e) {
+    } catch {
       setError('Fehler beim Beitreten. Bitte nochmal versuchen.');
     }
     setLoading(false);
   }
 
+  function updateLocalName(i: number, v: string) {
+    setLocalPlayers(p => p.map((pl, idx) => idx === i ? { ...pl, name: v } : pl));
+    if (i === 0) localStorage.setItem('busfahren_name', v);
+  }
+
+  function addLocalPlayer() {
+    if (localPlayers.length >= 6) return;
+    setLocalPlayers(p => [...p, { id: crypto.randomUUID(), name: '' }]);
+  }
+
+  function removeLocalPlayer(i: number) {
+    setLocalPlayers(p => p.filter((_, idx) => idx !== i));
+  }
+
+  async function handleLocalStart() {
+    const filled = localPlayers.filter(p => p.name.trim());
+    if (filled.length < 2) return setError('Mindestens 2 Namen eingeben.');
+    setLoading(true);
+    setError('');
+    try {
+      const players = filled.map(p => ({ id: p.id, name: p.name.trim() }));
+      const roomId = await createLocalRoom(players);
+      onJoined(roomId, players.map(p => p.id));
+    } catch {
+      setError('Fehler beim Erstellen.');
+    }
+    setLoading(false);
+  }
+
+  if (localSetup) {
+    return (
+      <div className="game-area">
+        <button className="back-btn" onClick={() => { setLocalSetup(false); setError(''); }}>
+          ‹ Zurück
+        </button>
+        <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, margin: '-12px 0 16px' }}>
+          Lokal – ein Gerät für alle
+        </p>
+
+        <label>Spielernamen</label>
+        {localPlayers.map((p, i) => (
+          <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input
+              type="text"
+              placeholder={`Spieler ${i + 1}`}
+              value={p.name}
+              onChange={e => updateLocalName(i, e.target.value)}
+              maxLength={20}
+              style={{ flex: 1, marginBottom: 0 }}
+            />
+            {i >= 2 && (
+              <button
+                onClick={() => removeLocalPlayer(i)}
+                style={{ width: 'auto', padding: '8px 12px', margin: 0, flexShrink: 0 }}
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        ))}
+
+        {localPlayers.length < 6 && (
+          <button className="secondary" onClick={addLocalPlayer} style={{ marginBottom: 8 }}>
+            <Plus size={16} strokeWidth={2.5} /> Spieler hinzufügen
+          </button>
+        )}
+
+        {error && <div className="feedback wrong">{error}</div>}
+
+        <button onClick={handleLocalStart} disabled={loading}>
+          <Play size={16} strokeWidth={2} /> Lokal starten
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="game-area">
-      <button
-        onClick={onBack}
-        style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--primary)', fontSize: 15, padding: '0 0 8px', cursor: 'pointer' }}
-      >
-        ‹ Zurück
-      </button>
-      <h1>🚌 Busfahren</h1>
+      <button className="back-btn" onClick={onBack}>‹ Zurück</button>
+      <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
 
       <label>Dein Name</label>
       <input
@@ -73,7 +151,11 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
       {error && <div className="feedback wrong">{error}</div>}
 
       <button onClick={handleCreate} disabled={loading}>
-        🎉 Neuen Raum erstellen
+        <Plus size={17} strokeWidth={2.5} /> Neuen Raum erstellen
+      </button>
+
+      <button className="secondary" onClick={() => { setError(''); setLocalSetup(true); }} disabled={loading}>
+        <Monitor size={16} strokeWidth={2} /> Lokal (1 Gerät)
       </button>
 
       <div className="divider" />
@@ -89,7 +171,7 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
       />
 
       <button className="secondary" onClick={handleJoin} disabled={loading}>
-        🚪 Raum beitreten
+        <LogIn size={16} strokeWidth={2} /> Raum beitreten
       </button>
     </div>
   );

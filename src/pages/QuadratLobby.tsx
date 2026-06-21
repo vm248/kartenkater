@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Grid3x3, Copy, Check, Link, LogOut, Play } from 'lucide-react';
 import type { QuadratRoom } from '../quadratTypes';
 import { startQuadratGame, kickQuadratPlayer } from '../quadratActions';
 import { playerColor } from '../playerColors';
@@ -50,22 +51,26 @@ export default function QuadratLobby({ room, playerId }: Props) {
 
   return (
     <div className="game-area">
-      <h1>🪟 Das Fenster</h1>
+      <h1><Grid3x3 size={22} strokeWidth={1.75} /> Das Fenster</h1>
 
       <h2>Raum-Code</h2>
       <div className="room-code">{room.id}</div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: '1rem' }}>
         <button className="copy-btn" onClick={handleCopy}>
-          {copied ? '✅ Kopiert!' : '📋 Code kopieren'}
+          {copied ? <><Check size={13} strokeWidth={2.5} /> Kopiert!</> : <><Copy size={13} /> Code kopieren</>}
         </button>
         <button className="copy-btn" onClick={handleShareLink}>
-          {linkCopied ? '✅ Link kopiert!' : '🔗 Link teilen'}
+          {linkCopied ? <><Check size={13} strokeWidth={2.5} /> Link kopiert!</> : <><Link size={13} /> Link teilen</>}
         </button>
       </div>
 
-      {leaveMsg && <div className="leave-toast">🚪 {leaveMsg}</div>}
+      {leaveMsg && (
+        <div className="leave-toast" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <LogOut size={14} strokeWidth={2} /> {leaveMsg}
+        </div>
+      )}
 
-      <h3>👥 Spieler ({room.playerOrder.length})</h3>
+      <h3>Spieler ({room.playerOrder.length})</h3>
       <ul className="player-list">
         {room.playerOrder.map(id => {
           const color = playerColor(room.playerOrder, id);
@@ -111,17 +116,17 @@ export default function QuadratLobby({ room, playerId }: Props) {
 
         {showRules && (
           <div style={{ marginTop: 12, lineHeight: 1.6, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🗂️ Das Spielfeld</p>
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>Das Spielfeld</p>
             <p style={{ margin: '0 0 10px', opacity: 0.85 }}>
               Das Fenster ist ein 5×5-Raster mit 20 Karten (5 Felder bleiben leer).
               Die 4 <strong>Eckkarten (C)</strong> sind von Anfang an aufgedeckt und dienen als Vergleichskarten.
-              Verfügbare Karten leuchten blau – du tippst drauf und rätst.
+              Verfügbare Karten sind hervorgehoben – du tippst drauf und rätst.
             </p>
 
-            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🃏 Kartentypen & Ratmechanik</p>
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>Kartentypen & Ratmechanik</p>
             <p style={{ margin: '0 0 4px', opacity: 0.85 }}>
               <strong>Seitenkarten (S)</strong> – direkt neben den Ecken, sofort verfügbar.<br />
-              Rate: <em>höher / tiefer / gleich</em> als die benachbarte Eckkarte.
+              Rate: <em>höher / tiefer</em> als die benachbarte Eckkarte. Gleicher Wert = falsch.
             </p>
             <p style={{ margin: '0 0 4px', opacity: 0.85 }}>
               <strong>Mittenkarten (M)</strong> – in der Mitte der Außenseiten, verfügbar wenn beide benachbarten Seitenkarten aufgedeckt sind.<br />
@@ -132,7 +137,7 @@ export default function QuadratLobby({ room, playerId }: Props) {
               Rate: <em>höher / tiefer</em> als die benachbarte Mittenkarte. Gleicher Wert = falsch.
             </p>
 
-            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🔄 Zugablauf</p>
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>Zugablauf</p>
             <p style={{ margin: '0 0 4px', opacity: 0.85 }}>
               <strong>Richtig geraten:</strong> Karte wird aufgedeckt, du bleibst dran und kannst weitermachen oder freiwillig weitergeben.
             </p>
@@ -143,7 +148,7 @@ export default function QuadratLobby({ room, playerId }: Props) {
               <strong>Falsch geraten:</strong> Die falsche Karte + alle direkt benachbarten aufgedeckten Karten werden entfernt und durch neue ersetzt. Du musst so viele Schlücke trinken wie Karten entfernt wurden. Dann ist der nächste Spieler dran.
             </p>
 
-            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>🏆 Spielende</p>
+            <p style={{ fontWeight: 600, margin: '0 0 6px' }}>Spielende</p>
             <p style={{ margin: 0, opacity: 0.85 }}>
               Wer alle 20 Karten aufdeckt, gewinnt das Fenster und darf <strong>10 Schlücke</strong> frei unter allen anderen Spielern verteilen.
             </p>
@@ -154,7 +159,7 @@ export default function QuadratLobby({ room, playerId }: Props) {
       {isHost && (
         <>
           <button onClick={() => startQuadratGame(room)} disabled={room.playerOrder.length < 2}>
-            🚀 Spiel starten
+            <Play size={16} strokeWidth={2} /> Spiel starten
           </button>
           {room.playerOrder.length < 2 && (
             <p style={{ textAlign: 'center', fontSize: 13, opacity: 0.6 }}>
@@ -165,7 +170,7 @@ export default function QuadratLobby({ room, playerId }: Props) {
       )}
 
       {!isHost && (
-        <div className="waiting-text">⏳ Warte auf den Host…</div>
+        <div className="waiting-text">Warte auf den Host…</div>
       )}
     </div>
   );

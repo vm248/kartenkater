@@ -1,3 +1,4 @@
+import { Bus, ChevronUp, ChevronDown, RotateCcw, Play, Check, X, Shuffle, Layers, Clock } from 'lucide-react';
 import type { GameRoom } from '../types';
 import CardComponent from '../components/CardComponent';
 import PyramidGrid from '../components/PyramidGrid';
@@ -52,7 +53,7 @@ export default function Game({ room, playerId }: Props) {
 
     return (
       <div className="game-area">
-        <h1>🚌 Busfahren</h1>
+        <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
         <h2>{STEP_NAMES[step]}</h2>
 
         {la && (
@@ -76,13 +77,13 @@ export default function Game({ room, playerId }: Props) {
             </div>
           </>
         ) : (
-          <div className="waiting-text">
-            ⏳ {currentPlayer?.name ?? '?'} ist dran…
+          <div className="waiting-text" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Clock size={16} strokeWidth={2} /> {currentPlayer?.name ?? '?'} ist dran…
           </div>
         )}
 
         <div className="divider" />
-        <h3>🃏 Deine Karten</h3>
+        <h3>Deine Karten</h3>
         <div className="player-hand">
           {myHand.length === 0 ? (
             <span style={{ opacity: 0.5, fontSize: 14 }}>Noch keine Karten</span>
@@ -94,7 +95,7 @@ export default function Game({ room, playerId }: Props) {
         </div>
 
         <div className="divider" />
-        <h3>👥 Alle Spieler</h3>
+        <h3>Alle Spieler</h3>
         {room.playerOrder.map(id => {
           const color = playerColor(room.playerOrder, id);
           return (
@@ -103,7 +104,7 @@ export default function Game({ room, playerId }: Props) {
                 <span className="player-dot" style={{ background: color }} />
                 {room.players[id]?.name}
                 {id === playerId && ' (Du)'}
-                {id === currentPlayerId && ' 👈'}
+                {id === currentPlayerId && <span style={{ color: 'var(--primary)', marginLeft: 2, fontSize: 16, lineHeight: 1 }}>←</span>}
               </strong>
               <div className="card-row" style={{ marginTop: 6 }}>
                 {(room.players[id]?.hand ?? []).map((c, i) => (
@@ -126,16 +127,18 @@ export default function Game({ room, playerId }: Props) {
   if (status === 'phase2start') {
     return (
       <div className="game-area">
-        <h1>🚌 Busfahren</h1>
-        <h2>🧱 Pyramide</h2>
+        <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
+        <h2>Pyramide</h2>
         <p style={{ textAlign: 'center' }}>Wie soll die Pyramide aufgedeckt werden?</p>
         {isHost ? (
           <div className="choices">
-            <button onClick={() => startPyramid(room, 'top')}>🔼 Von oben</button>
-            <button onClick={() => startPyramid(room, 'bottom')}>🔽 Von unten</button>
+            <button onClick={() => startPyramid(room, 'top')}><ChevronUp size={16} /> Von oben</button>
+            <button onClick={() => startPyramid(room, 'bottom')}><ChevronDown size={16} /> Von unten</button>
           </div>
         ) : (
-          <div className="waiting-text">⏳ Warte auf den Host…</div>
+          <div className="waiting-text" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Clock size={16} strokeWidth={2} /> Warte auf den Host…
+          </div>
         )}
       </div>
     );
@@ -148,8 +151,8 @@ export default function Game({ room, playerId }: Props) {
 
     return (
       <div className="game-area">
-        <h1>🚌 Busfahren</h1>
-        <h2>🧱 Pyramidenphase</h2>
+        <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
+        <h2>Pyramidenphase</h2>
 
         <PyramidGrid pyramid={room.pyramid} rows={room.settings.pyramidRows} />
 
@@ -165,16 +168,16 @@ export default function Game({ room, playerId }: Props) {
           </button>
         )}
         {!isHost && !done && (
-          <div className="waiting-text" style={{ fontSize: 15 }}>
-            ⏳ Host deckt Karten auf…
+          <div className="waiting-text" style={{ fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Clock size={15} strokeWidth={2} /> Host deckt Karten auf…
           </div>
         )}
 
         <div className="divider" />
-        <h3>🃏 Deine verbleibenden Karten</h3>
+        <h3>Deine verbleibenden Karten</h3>
         <div className="player-hand">
           {myHand.length === 0 ? (
-            <span style={{ opacity: 0.5, fontSize: 14 }}>Keine Karten mehr – sehr gut! 🎉</span>
+            <span style={{ opacity: 0.5, fontSize: 14 }}>Keine Karten mehr – sehr gut!</span>
           ) : (
             <div className="card-row">
               {myHand.map((c, i) => <CardComponent key={i} card={c} />)}
@@ -210,42 +213,39 @@ export default function Game({ room, playerId }: Props) {
 
     return (
       <div className="game-area">
-        <h1>🚌 Busfahren</h1>
-        <h2>🚍 Busfahrer-Ermittlung</h2>
+        <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
+        <h2>Busfahrer-Ermittlung</h2>
 
-        {/* No tiebreak – winner known */}
         {!candidates.length && room.busfahrerName && (
           <div className="info-box">
             <p style={{ fontSize: 20, fontWeight: 700 }}>
               {room.busfahrerId === playerId
-                ? '😱 Du musst Busfahren!'
-                : `🚌 ${room.busfahrerName} muss Busfahren!`}
+                ? 'Du musst Busfahren!'
+                : `${room.busfahrerName} muss Busfahren!`}
             </p>
           </div>
         )}
         {!candidates.length && room.busfahrerName && (
           isHost
-            ? <button onClick={() => startBusfahren(room)}>🚌 Busfahren starten</button>
-            : <div className="waiting-text">⏳ Warte auf den Host…</div>
+            ? <button onClick={() => startBusfahren(room)}><Play size={16} strokeWidth={2} /> Busfahren starten</button>
+            : <div className="waiting-text" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Clock size={16} strokeWidth={2} /> Warte auf den Host…</div>
         )}
 
-        {/* Tiebreak: not yet started */}
         {candidates.length > 0 && !offered && (
           <div className="info-box">
             <p style={{ fontWeight: 700, fontSize: 16 }}>
               Gleichstand! Stechen zwischen: {candidates.map(id => room.players[id]?.name).join(' & ')}
             </p>
             {isHost
-              ? <button style={{ marginTop: 8 }} onClick={() => initTiebreak(room)}>🃏 Stechen starten</button>
-              : <div className="waiting-text" style={{ marginTop: 8 }}>⏳ Warte auf den Host…</div>}
+              ? <button style={{ marginTop: 8 }} onClick={() => initTiebreak(room)}><Layers size={15} /> Stechen starten</button>
+              : <div className="waiting-text" style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Clock size={16} strokeWidth={2} /> Warte auf den Host…</div>}
           </div>
         )}
 
-        {/* Tiebreak: picking phase */}
         {candidates.length > 0 && offered && !allPicked && (
           <div className="info-box">
             <p style={{ fontWeight: 700, fontSize: 15, margin: '0 0 10px' }}>
-              🃏 Stechen – {candidates.map(id => room.players[id]?.name).join(' & ')}
+              Stechen – {candidates.map(id => room.players[id]?.name).join(' & ')}
             </p>
             {iAmCandidate && !myPick && (
               <>
@@ -271,26 +271,28 @@ export default function Game({ room, playerId }: Props) {
                 </div>
               </>
             )}
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {candidates.map(id => (
-                <span key={id} style={{ fontSize: 13, opacity: 0.7, marginRight: 12 }}>
-                  {room.players[id]?.name}: {picks?.[id] ? '✅' : '⏳'}
+                <span key={id} style={{ fontSize: 13, opacity: 0.7, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {room.players[id]?.name}:{' '}
+                  {picks?.[id]
+                    ? <Check size={13} strokeWidth={2.5} color="#10B981" />
+                    : <Clock size={13} strokeWidth={2} />}
                 </span>
               ))}
             </div>
             {!iAmCandidate && (
-              <div className="waiting-text" style={{ marginTop: 8 }}>⏳ Spieler ziehen ihre Karten…</div>
+              <div className="waiting-text" style={{ marginTop: 8 }}>Spieler ziehen ihre Karten…</div>
             )}
           </div>
         )}
 
-        {/* Tiebreak: all picked – reveal */}
         {candidates.length > 0 && offered && allPicked && picks && (
           <div className="info-box">
             <p style={{ fontWeight: 700, fontSize: 16, margin: '0 0 12px' }}>
               {winnerIds.length === 1
-                ? `🎯 ${room.players[winnerIds[0]]?.name} hat die höchste Karte und muss fahren!`
-                : `🤝 Gleichstand! Neues Stechen zwischen: ${winnerIds.map(id => room.players[id]?.name).join(' & ')}`}
+                ? `${room.players[winnerIds[0]]?.name} hat die höchste Karte und muss fahren!`
+                : `Gleichstand! Neues Stechen zwischen: ${winnerIds.map(id => room.players[id]?.name).join(' & ')}`}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 12 }}>
               {candidates.map(id => (
@@ -304,10 +306,12 @@ export default function Game({ room, playerId }: Props) {
             </div>
             {isHost && (
               <button onClick={() => resolveTiebreak(room)}>
-                {winnerIds.length === 1 ? '✅ Busfahrer bestätigen' : '🔄 Neues Stechen'}
+                {winnerIds.length === 1
+                  ? <><Check size={15} strokeWidth={2.5} /> Busfahrer bestätigen</>
+                  : <><RotateCcw size={15} /> Neues Stechen</>}
               </button>
             )}
-            {!isHost && <div className="waiting-text">⏳ Warte auf den Host…</div>}
+            {!isHost && <div className="waiting-text">Warte auf den Host…</div>}
           </div>
         )}
 
@@ -338,8 +342,8 @@ export default function Game({ room, playerId }: Props) {
 
     return (
       <div className="game-area">
-        <h1>🚌 Busfahren</h1>
-        <h2>🚌 {room.busfahrerName} fährt Bus!</h2>
+        <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
+        <h2>{room.busfahrerName} fährt Bus!</h2>
 
         <div style={{ marginBottom: 8 }}>
           <h3>Aktuelle Karten</h3>
@@ -361,8 +365,8 @@ export default function Game({ room, playerId }: Props) {
           </div>
         )}
 
-        <p style={{ textAlign: 'center', opacity: 0.6, fontSize: 13 }}>
-          🃏 {room.deck.length} Karten im Deck
+        <p style={{ textAlign: 'center', opacity: 0.6, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+          <Layers size={13} strokeWidth={2} /> {room.deck.length} Karten im Deck
         </p>
 
         {!room.awaitingContinue && room.busIndex < 5 && !deckEmpty && (
@@ -375,30 +379,33 @@ export default function Game({ room, playerId }: Props) {
 
         {deckEmpty && room.busIndex < 5 && (
           <div className="feedback wrong" style={{ marginBottom: 8 }}>
-            🃏 Das Deck ist leer!
+            Das Deck ist leer!
           </div>
         )}
 
         {isBusfahrer ? (
           room.awaitingContinue ? (
-            <>
+            deckEmpty ? (
+              <>
+                <button onClick={() => reshuffleBusDeck(room)}>
+                  <Shuffle size={15} /> Neu mischen & weiterspielen
+                </button>
+                <button onClick={() => restartGame(room)} style={{ marginTop: 8, background: 'var(--card-inner)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                  <RotateCcw size={15} /> Neue Runde
+                </button>
+              </>
+            ) : (
               <button onClick={() => continueAfterBusFail(room)}>
-                😵 Nochmal von vorne!
+                <Check size={16} strokeWidth={2.5} /> Getrunken – Nochmal von vorne!
               </button>
-              <button
-                onClick={() => restartGame(room)}
-                style={{ marginTop: 8, background: 'var(--card-inner)', color: 'var(--text)', border: '1px solid var(--border)' }}
-              >
-                🔁 Neue Runde
-              </button>
-            </>
+            )
           ) : deckEmpty && room.busIndex < 5 ? (
             <>
               <button onClick={() => reshuffleBusDeck(room)}>
-                🔀 Neu mischen & weiterspielen
+                <Shuffle size={15} /> Neu mischen & weiterspielen
               </button>
-              <button onClick={() => restartGame(room)} style={{ marginTop: 8, background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)' }}>
-                🏠 Deck leer – zurück zum Hauptmenü
+              <button onClick={() => restartGame(room)} style={{ marginTop: 8, background: 'var(--card-inner)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                <RotateCcw size={15} /> Neue Runde
               </button>
             </>
           ) : room.busIndex < 5 ? (
@@ -411,8 +418,8 @@ export default function Game({ room, playerId }: Props) {
         ) : (
           <div className="waiting-text" style={{ fontSize: 15 }}>
             {deckEmpty && room.busIndex < 5
-              ? '🃏 Deck leer – wartet auf neues Mischen…'
-              : `👀 ${room.busfahrerName} fährt gerade Bus…`}
+              ? 'Deck leer – wartet auf neues Mischen…'
+              : `${room.busfahrerName} fährt gerade Bus…`}
           </div>
         )}
       </div>
@@ -425,21 +432,20 @@ export default function Game({ room, playerId }: Props) {
       <>
         <Confetti />
         <div className="game-area">
-          <h1>🚌 Busfahren</h1>
+          <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
           <div className="info-box">
-            <p style={{ fontSize: 24 }}>🎉</p>
             <p style={{ fontSize: 20, fontWeight: 700 }}>
               {room.busfahrerName} hat den Bus überlebt!
             </p>
-            <p>Prost an alle! 🍻</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 15, margin: 0 }}>Prost an alle!</p>
           </div>
           {isHost && (
             <button onClick={() => restartGame(room)}>
-              🔁 Nochmal spielen
+              <RotateCcw size={15} /> Nochmal spielen
             </button>
           )}
           {!isHost && (
-            <div className="waiting-text">⏳ Warte auf den Host…</div>
+            <div className="waiting-text">Warte auf den Host…</div>
           )}
         </div>
       </>

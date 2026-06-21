@@ -4,8 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <title>Kartenkater</title>
+  <script>
+    (function() {
+      var dark = localStorage.getItem('busfahren_dark') === '1';
+      if (dark) document.body.classList.add('dark');
+      var theme = localStorage.getItem('busfahren_theme');
+      if (theme && theme !== 'lila') document.body.classList.add('theme-' + theme);
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>

@@ -75,6 +75,33 @@ export async function createRoom(playerId: string, playerName: string): Promise<
   return code;
 }
 
+export async function createLocalRoom(players: { id: string; name: string }[]): Promise<string> {
+  cleanupOldRooms();
+  const code = genCode();
+  const playerMap: Record<string, Player> = {};
+  const playerOrder: string[] = [];
+  for (const p of players) {
+    playerMap[p.id] = { id: p.id, name: p.name, hand: [], joinedAt: Date.now() };
+    playerOrder.push(p.id);
+  }
+  const room: GameRoom = {
+    id: code, status: 'lobby', hostId: players[0].id,
+    settings: { deckType: 'skat', guessDeckCount: 1, busDeckCount: 1, pyramidRows: 3, cardsPerRound: 3, busDifficulty: 'normal' },
+    players: playerMap, playerOrder, deck: [],
+    currentStep: 0, currentPlayerIndex: 0,
+    pyramid: [], revealOrder: [], pyramidIndex: 0,
+    busfahrerId: null, busfahrerName: null,
+    tiebreakCandidates: null, tiebreakOffered: null, tiebreakPicks: null,
+    busCards: [null, null, null, null, null],
+    previousBusCards: [null, null, null, null, null],
+    busIndex: 0, useHigherLower: false, awaitingContinue: false,
+    lastFailedIndex: 0, lastAction: null, pyramidMatchText: null,
+    createdAt: Date.now(),
+  };
+  await setDoc(doc(db, 'rooms', code), room);
+  return code;
+}
+
 export async function joinRoom(
   roomId: string,
   playerId: string,
@@ -139,8 +166,15 @@ export async function leaveRoom(room: GameRoom, playerId: string): Promise<void>
 
   if (room.tiebreakCandidates?.includes(playerId)) {
     const remaining = room.tiebreakCandidates.filter(id => id !== playerId);
-    if (remaining.length === 1) {
+    if (remaining.length === 0) {
       update.tiebreakCandidates = null;
+      update.tiebreakOffered = null;
+      update.tiebreakPicks = null;
+      update.status = 'finished';
+    } else if (remaining.length === 1) {
+      update.tiebreakCandidates = null;
+      update.tiebreakOffered = null;
+      update.tiebreakPicks = null;
       update.busfahrerId = remaining[0];
       update.busfahrerName = room.players[remaining[0]]?.name ?? '';
     } else {
@@ -171,6 +205,7 @@ export async function startGame(room: GameRoom): Promise<void> {
 
 export async function makeGuess(room: GameRoom, playerId: string, guess: string): Promise<void> {
   const deck = [...room.deck];
+  if (deck.length === 0) return;
   const card = deck.pop()!;
   const player = room.players[playerId];
   const newHand = [...player.hand, card];
@@ -324,6 +359,7 @@ export async function pickTiebreakCard(room: GameRoom, playerId: string, card: C
 export async function resolveTiebreak(room: GameRoom): Promise<void> {
   const candidates = room.tiebreakCandidates!;
   const picks = room.tiebreakPicks!;
+  if (candidates.some(id => !picks[id])) return;
   const maxVal = Math.max(...candidates.map(id => valueToNum(picks[id]!.value)));
   const winners = candidates.filter(id => valueToNum(picks[id]!.value) === maxVal);
 
@@ -372,6 +408,7 @@ export async function startBusfahren(room: GameRoom): Promise<void> {
 }
 
 export async function makeBusAnswer(room: GameRoom, guess: string): Promise<void> {
+  if (room.busIndex >= 5 || room.awaitingContinue) return;
   const deck = [...room.deck];
   if (deck.length === 0) return;
 

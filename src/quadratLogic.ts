@@ -86,9 +86,8 @@ export function evaluateQuadratGuess(guess: string, cellIndex: number, grid: QCe
 
   if (cell.type === 'S') {
     const rv = valueToNum(grid[comp as number].card!.value);
-    if (guess === 'drüber') return cv > rv;
-    if (guess === 'drunter') return cv < rv;
-    if (guess === 'gleich') return cv === rv;
+    if (guess === 'Höher') return cv > rv;
+    if (guess === 'Tiefer') return cv < rv;
   }
 
   if (cell.type === 'M') {
@@ -97,14 +96,14 @@ export function evaluateQuadratGuess(guess: string, cellIndex: number, grid: QCe
     const v2 = valueToNum(grid[p2].card!.value);
     const min = Math.min(v1, v2);
     const max = Math.max(v1, v2);
-    if (guess === 'innerhalb') return cv > min && cv < max;
-    if (guess === 'außerhalb') return cv < min || cv > max;
+    if (guess === 'Innerhalb') return cv > min && cv < max;
+    if (guess === 'Außerhalb') return cv < min || cv > max;
   }
 
   if (cell.type === 'I') {
     const rv = valueToNum(grid[comp as number].card!.value);
-    if (guess === 'drüber') return cv > rv;
-    if (guess === 'drunter') return cv < rv;
+    if (guess === 'Höher') return cv > rv;
+    if (guess === 'Tiefer') return cv < rv;
   }
 
   return false;
@@ -112,13 +111,13 @@ export function evaluateQuadratGuess(guess: string, cellIndex: number, grid: QCe
 
 export function connectedRevealedCells(startIndex: number, grid: QCell[]): number[] {
   const toRemove = new Set<number>([startIndex]);
-  const queue = (ADJACENT[startIndex] ?? []).filter(i => grid[i].revealed && grid[i].type !== null);
+  const queue = (ADJACENT[startIndex] ?? []).filter(i => grid[i].revealed && grid[i].type !== null && grid[i].type !== 'C');
   for (let i = 0; i < queue.length; i++) {
     const pos = queue[i];
     if (toRemove.has(pos)) continue;
     toRemove.add(pos);
     for (const adj of ADJACENT[pos] ?? []) {
-      if (!toRemove.has(adj) && grid[adj].revealed && grid[adj].type !== null) {
+      if (!toRemove.has(adj) && grid[adj].revealed && grid[adj].type !== null && grid[adj].type !== 'C') {
         queue.push(adj);
       }
     }

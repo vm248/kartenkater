@@ -34,5 +34,6 @@ export interface QuadratRoom {
   winnerName: string | null;
   sipsRemaining: number;
   sipsGiven: Record<string, number>;
+  awaitingDrinkConfirm: boolean;
   createdAt: number;
 }
