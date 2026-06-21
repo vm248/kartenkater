@@ -11,7 +11,6 @@ export interface Player {
   name: string;
   hand: Card[];
   joinedAt: number;
-  sips: number;
 }
 
 export type GameStatus =

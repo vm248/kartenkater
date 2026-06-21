@@ -63,7 +63,6 @@ export default function Lobby({ room, playerId }: Props) {
       <ul className="player-list">
         {room.playerOrder.map(id => {
           const color = playerColor(room.playerOrder, id);
-          const sips = room.players[id]?.sips ?? 0;
           return (
             <li key={id}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -71,7 +70,6 @@ export default function Lobby({ room, playerId }: Props) {
                 {room.players[id]?.name}
                 {id === room.hostId && <span className="badge">Host</span>}
                 {id === playerId && <span className="badge" style={{ background: '#27ae60' }}>Du</span>}
-                {sips > 0 && <span className="sip-count">🍺 {sips}</span>}
               </span>
               {isHost && id !== playerId && (
                 <button

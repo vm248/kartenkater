@@ -95,7 +95,6 @@ export default function Game({ room, playerId }: Props) {
         <h3>👥 Alle Spieler</h3>
         {room.playerOrder.map(id => {
           const color = playerColor(room.playerOrder, id);
-          const sips = room.players[id]?.sips ?? 0;
           return (
             <div key={id} className="player-hand" style={{ marginBottom: 8, borderLeft: `3px solid ${color}` }}>
               <strong style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -103,7 +102,6 @@ export default function Game({ room, playerId }: Props) {
                 {room.players[id]?.name}
                 {id === playerId && ' (Du)'}
                 {id === currentPlayerId && ' 👈'}
-                {sips > 0 && <span className="sip-count">🍺 {sips}</span>}
               </strong>
               <div className="card-row" style={{ marginTop: 6 }}>
                 {(room.players[id]?.hand ?? []).map((c, i) => (
@@ -332,9 +330,6 @@ export default function Game({ room, playerId }: Props) {
 
   // --- Finished ---
   if (status === 'finished') {
-    const sorted = [...room.playerOrder].sort(
-      (a, b) => (room.players[b]?.sips ?? 0) - (room.players[a]?.sips ?? 0)
-    );
     return (
       <>
         <Confetti />
@@ -347,25 +342,6 @@ export default function Game({ room, playerId }: Props) {
             </p>
             <p>Prost an alle! 🍻</p>
           </div>
-
-          <h3>🍺 Schluck-Bilanz</h3>
-          <ul className="player-list">
-            {sorted.map(id => {
-              const color = playerColor(room.playerOrder, id);
-              const sips = room.players[id]?.sips ?? 0;
-              return (
-                <li key={id}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span className="player-dot" style={{ background: color }} />
-                    {room.players[id]?.name}
-                    {id === playerId && ' (Du)'}
-                  </span>
-                  <span className="sip-count">🍺 {sips}</span>
-                </li>
-              );
-            })}
-          </ul>
-
           {isHost && (
             <button onClick={() => restartGame(room)}>
               🔁 Nochmal spielen

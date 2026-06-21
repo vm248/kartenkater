@@ -414,16 +414,6 @@ button.danger:hover:not(:disabled) {
   to   { transform: translateY(0);     opacity: 1; }
 }
 
-.sip-count {
-  font-size: 12px;
-  background: var(--primary);
-  color: #fff;
-  padding: 2px 7px;
-  border-radius: 20px;
-  margin-left: 6px;
-  font-weight: 600;
-}
-
 .player-dot {
   display: inline-block;
   width: 10px;
