@@ -381,9 +381,17 @@ export default function Game({ room, playerId }: Props) {
 
         {isBusfahrer ? (
           room.awaitingContinue ? (
-            <button onClick={() => continueAfterBusFail(room)}>
-              😵 Nochmal von vorne!
-            </button>
+            <>
+              <button onClick={() => continueAfterBusFail(room)}>
+                😵 Nochmal von vorne!
+              </button>
+              <button
+                onClick={() => restartGame(room)}
+                style={{ marginTop: 8, background: 'var(--card-inner)', color: 'var(--text)', border: '1px solid var(--border)' }}
+              >
+                🔁 Neue Runde
+              </button>
+            </>
           ) : deckEmpty && room.busIndex < 5 ? (
             <>
               <button onClick={() => reshuffleBusDeck(room)}>
