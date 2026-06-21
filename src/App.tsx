@@ -2,18 +2,29 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import type { GameRoom } from './types';
+import type { QuadratRoom } from './quadratTypes';
 import { getPlayerId } from './gameActions';
 import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
 import Game from './pages/Game';
+import QuadratHome from './pages/QuadratHome';
+import QuadratLobby from './pages/QuadratLobby';
+import QuadratGame from './pages/QuadratGame';
 
 export default function App() {
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
+
   const [roomId, setRoomId] = useState<string | null>(
     () => sessionStorage.getItem('busfahren_room')
   );
   const [room, setRoom] = useState<GameRoom | null>(null);
+
+  const [quadratRoomId, setQuadratRoomId] = useState<string | null>(
+    () => sessionStorage.getItem('quadrat_room')
+  );
+  const [quadratRoom, setQuadratRoom] = useState<QuadratRoom | null>(null);
+
   const [dark, setDark] = useState(
     () => localStorage.getItem('busfahren_dark') === '1'
   );
@@ -41,19 +52,51 @@ export default function App() {
     return unsub;
   }, [roomId]);
 
+  useEffect(() => {
+    if (!quadratRoomId) return;
+    sessionStorage.setItem('quadrat_room', quadratRoomId);
+    const unsub = onSnapshot(doc(db, 'quadrat', quadratRoomId), snap => {
+      if (snap.exists()) {
+        const data = snap.data() as QuadratRoom;
+        if (!data.playerOrder.includes(playerId)) {
+          handleLeave();
+          return;
+        }
+        setQuadratRoom(data);
+      }
+    });
+    return unsub;
+  }, [quadratRoomId]);
+
   function handleJoined(id: string) {
+    sessionStorage.removeItem('quadrat_room');
+    setQuadratRoomId(null);
+    setQuadratRoom(null);
     setRoomId(id);
+  }
+
+  function handleQuadratJoined(id: string) {
+    sessionStorage.removeItem('busfahren_room');
+    setRoomId(null);
+    setRoom(null);
+    setQuadratRoomId(id);
   }
 
   function handleLeave() {
     sessionStorage.removeItem('busfahren_room');
+    sessionStorage.removeItem('quadrat_room');
     setRoomId(null);
     setRoom(null);
+    setQuadratRoomId(null);
+    setQuadratRoom(null);
     setSelectedGame(null);
   }
 
-  const showGame = room && room.status !== 'lobby';
+  const inRoom = roomId || quadratRoomId;
   const showLobby = room && room.status === 'lobby';
+  const showGame = room && room.status !== 'lobby';
+  const showQuadratLobby = quadratRoom && quadratRoom.status === 'lobby';
+  const showQuadratGame = quadratRoom && quadratRoom.status !== 'lobby';
 
   return (
     <>
@@ -66,7 +109,7 @@ export default function App() {
         >
           {dark ? '☀️' : '🌙'}
         </button>
-        {(selectedGame || roomId) && (
+        {(selectedGame || inRoom) && (
           <button
             className="icon-btn"
             onClick={handleLeave}
@@ -78,12 +121,17 @@ export default function App() {
         )}
       </div>
 
-      {!roomId && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
-      {!roomId && selectedGame === 'busfahren' && (
+      {!inRoom && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
+      {!inRoom && selectedGame === 'busfahren' && (
         <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} />
+      )}
+      {!inRoom && selectedGame === 'quadrat' && (
+        <QuadratHome onJoined={handleQuadratJoined} onBack={() => setSelectedGame(null)} />
       )}
       {showLobby && <Lobby room={room} playerId={playerId} />}
       {showGame && <Game room={room} playerId={playerId} />}
+      {showQuadratLobby && <QuadratLobby room={quadratRoom} playerId={playerId} />}
+      {showQuadratGame && <QuadratGame room={quadratRoom} playerId={playerId} />}
     </>
   );
 }

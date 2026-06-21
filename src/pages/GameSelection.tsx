@@ -10,9 +10,15 @@ const GAMES = [
     desc: 'Kartenspiel für 2–8 Spieler',
     available: true,
   },
-  { id: 'soon1', emoji: '🃏', name: 'Bald verfügbar', desc: '', available: false },
-  { id: 'soon2', emoji: '🎲', name: 'Bald verfügbar', desc: '', available: false },
-  { id: 'soon3', emoji: '🍺', name: 'Bald verfügbar', desc: '', available: false },
+  {
+    id: 'quadrat',
+    emoji: '⬛',
+    name: 'Das Quadrat',
+    desc: 'Kartenspiel für 2–8 Spieler',
+    available: true,
+  },
+  { id: 'soon1', emoji: '🎲', name: 'Bald verfügbar', desc: '', available: false },
+  { id: 'soon2', emoji: '🍺', name: 'Bald verfügbar', desc: '', available: false },
 ];
 
 export default function GameSelection({ onSelect }: Props) {

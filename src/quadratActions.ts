@@ -1,0 +1,184 @@
+import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { db } from './firebase';
+import type { Player } from './types';
+import type { QuadratRoom, QCell } from './quadratTypes';
+import {
+  createQuadratDeck, createInitialGrid, evaluateQuadratGuess,
+  ADJACENT, CELL_TYPES, ensureDeck,
+} from './quadratLogic';
+import { getPlayerId } from './gameActions';
+
+function genCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+async function cleanupOldQuadratRooms(): Promise<void> {
+  try {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const q = query(collection(db, 'quadrat'), where('createdAt', '<', cutoff));
+    const snap = await getDocs(q);
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+  } catch {
+    // ignore
+  }
+}
+
+export async function createQuadratRoom(playerId: string, playerName: string): Promise<string> {
+  cleanupOldQuadratRooms();
+  const code = genCode();
+  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
+
+  const room: QuadratRoom = {
+    id: code,
+    status: 'lobby',
+    hostId: playerId,
+    players: { [playerId]: player },
+    playerOrder: [playerId],
+    grid: [],
+    deck: [],
+    discard: [],
+    currentPlayerIndex: 0,
+    streak: 0,
+    lastAction: null,
+    winnerId: null,
+    winnerName: null,
+    sipsRemaining: 0,
+    sipsGiven: {},
+    createdAt: Date.now(),
+  };
+
+  await setDoc(doc(db, 'quadrat', code), room);
+  return code;
+}
+
+export async function joinQuadratRoom(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const ref = doc(db, 'quadrat', roomId.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return { ok: false, error: 'Raum nicht gefunden.' };
+  const room = snap.data() as QuadratRoom;
+  if (room.status !== 'lobby') return { ok: false, error: 'Spiel läuft bereits.' };
+  if (room.players[playerId]) return { ok: true };
+
+  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
+  await updateDoc(ref, {
+    [`players.${playerId}`]: player,
+    playerOrder: [...room.playerOrder, playerId],
+  });
+  return { ok: true };
+}
+
+export async function kickQuadratPlayer(room: QuadratRoom, targetId: string): Promise<void> {
+  const newOrder = room.playerOrder.filter(id => id !== targetId);
+  const newPlayers = { ...room.players };
+  delete newPlayers[targetId];
+  await updateDoc(doc(db, 'quadrat', room.id), {
+    playerOrder: newOrder,
+    players: newPlayers,
+  });
+}
+
+export async function startQuadratGame(room: QuadratRoom): Promise<void> {
+  const deck = createQuadratDeck();
+  const { grid, remaining } = createInitialGrid(deck);
+  await updateDoc(doc(db, 'quadrat', room.id), {
+    status: 'playing',
+    grid,
+    deck: remaining,
+    discard: [],
+    currentPlayerIndex: 0,
+    streak: 0,
+    lastAction: null,
+  });
+}
+
+export async function makeQuadratGuess(
+  room: QuadratRoom,
+  cellIndex: number,
+  guess: string,
+  playerId: string,
+): Promise<void> {
+  const grid: QCell[] = room.grid.map(c => ({ ...c }));
+  const card = grid[cellIndex].card!;
+  const playerName = room.players[playerId].name;
+  const correct = evaluateQuadratGuess(guess, cellIndex, grid);
+
+  if (correct) {
+    grid[cellIndex] = { ...grid[cellIndex], revealed: true };
+    const newStreak = room.streak + 1;
+    const allDone = grid.filter(c => c.type !== null).every(c => c.revealed);
+
+    if (allDone) {
+      await updateDoc(doc(db, 'quadrat', room.id), {
+        grid, streak: 0,
+        status: 'distributing',
+        winnerId: playerId,
+        winnerName: playerName,
+        sipsRemaining: 10,
+        lastAction: { playerName, cellIndex, guess, correct: true, card, drinkCount: 0 },
+      });
+    } else if (newStreak >= 3) {
+      const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
+      await updateDoc(doc(db, 'quadrat', room.id), {
+        grid, streak: 0, currentPlayerIndex: nextIndex,
+        lastAction: { playerName, cellIndex, guess, correct: true, card, drinkCount: 0 },
+      });
+    } else {
+      await updateDoc(doc(db, 'quadrat', room.id), {
+        grid, streak: newStreak,
+        lastAction: { playerName, cellIndex, guess, correct: true, card, drinkCount: 0 },
+      });
+    }
+  } else {
+    const toRemove = [cellIndex, ...ADJACENT[cellIndex].filter(i => grid[i].revealed)];
+    const drinkCount = toRemove.length;
+
+    let { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
+
+    for (const pos of toRemove) {
+      discard.push(grid[pos].card!);
+      const replacement = deck.pop()!;
+      const type = CELL_TYPES[pos];
+      grid[pos] = { index: pos, type, card: replacement, revealed: type === 'C' };
+    }
+
+    const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
+    await updateDoc(doc(db, 'quadrat', room.id), {
+      grid, deck, discard, streak: 0, currentPlayerIndex: nextIndex,
+      lastAction: { playerName, cellIndex, guess, correct: false, card, drinkCount },
+    });
+  }
+}
+
+export async function giveSip(room: QuadratRoom, targetId: string): Promise<void> {
+  if (room.sipsRemaining <= 0) return;
+  const current = room.sipsGiven?.[targetId] ?? 0;
+  await updateDoc(doc(db, 'quadrat', room.id), {
+    [`sipsGiven.${targetId}`]: current + 1,
+    sipsRemaining: room.sipsRemaining - 1,
+  });
+}
+
+export async function finishSipDistribution(room: QuadratRoom): Promise<void> {
+  await updateDoc(doc(db, 'quadrat', room.id), { status: 'finished' });
+}
+
+export async function restartQuadratGame(room: QuadratRoom): Promise<void> {
+  await updateDoc(doc(db, 'quadrat', room.id), {
+    status: 'lobby',
+    grid: [], deck: [], discard: [],
+    streak: 0, currentPlayerIndex: 0,
+    lastAction: null,
+    winnerId: null, winnerName: null,
+    sipsRemaining: 0, sipsGiven: {},
+  });
+}
+
+// re-export so QuadratHome can use it without importing gameActions
+export { getPlayerId };
