@@ -30,7 +30,12 @@ export default function App() {
     sessionStorage.setItem('busfahren_room', roomId);
     const unsub = onSnapshot(doc(db, 'rooms', roomId), snap => {
       if (snap.exists()) {
-        setRoom(snap.data() as GameRoom);
+        const data = snap.data() as GameRoom;
+        if (!data.playerOrder.includes(playerId)) {
+          handleLeave();
+          return;
+        }
+        setRoom(data);
       }
     });
     return unsub;
