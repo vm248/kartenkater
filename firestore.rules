@@ -3,24 +3,72 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     match /rooms/{roomId} {
-      // Jeder darf lesen (für onSnapshot in der App)
       allow read: if true;
-
-      // Raum erstellen: nur wenn kein Dokument existiert
-      allow create: if request.auth == null
-        && request.resource.data.status == 'lobby'
-        && request.resource.data.createdAt is int;
-
-      // Raum updaten: erlaubt wenn Spieler im Raum ist
-      allow update: if request.auth == null
-        && isPlayerInRoom(roomId);
+      allow create: if validNewRoom();
+      allow update: if validRoomUpdate();
+      allow delete: if resource.data.playerOrder.size() <= 1;
     }
 
-    function isPlayerInRoom(roomId) {
-      let room = get(/databases/$(database)/documents/rooms/$(roomId)).data;
-      // Spieler-ID kommt aus den Daten, da wir kein Auth nutzen
-      // Für Test-Modus: allow update: if true;
-      return true;
+    match /quadrat/{roomId} {
+      allow read: if true;
+      allow create: if validNewQuadrat();
+      allow update: if validQuadratUpdate();
+      allow delete: if resource.data.playerOrder.size() <= 1;
+    }
+
+    function validNewRoom() {
+      let d = request.resource.data;
+      return d.id == request.resource.id
+        && d.status == 'lobby'
+        && d.createdAt is int
+        && d.hostId is string
+        && d.hostId.size() > 0
+        && d.players is map
+        && d.playerOrder is list
+        && d.playerOrder.size() >= 1
+        && d.playerOrder.size() <= 12;
+    }
+
+    function validRoomUpdate() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.createdAt == old.createdAt
+        && d.id == old.id
+        && d.playerOrder is list
+        && d.playerOrder.size() <= 12
+        && validBusfahrenStatus(d.status);
+    }
+
+    function validBusfahrenStatus(s) {
+      return s == 'lobby' || s == 'phase1' || s == 'phase2start'
+          || s == 'phase2' || s == 'results' || s == 'phase3' || s == 'finished';
+    }
+
+    function validNewQuadrat() {
+      let d = request.resource.data;
+      return d.id == request.resource.id
+        && d.status == 'lobby'
+        && d.createdAt is int
+        && d.hostId is string
+        && d.hostId.size() > 0
+        && d.players is map
+        && d.playerOrder is list
+        && d.playerOrder.size() >= 1
+        && d.playerOrder.size() <= 12;
+    }
+
+    function validQuadratUpdate() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.createdAt == old.createdAt
+        && d.id == old.id
+        && d.playerOrder is list
+        && d.playerOrder.size() <= 12
+        && validQuadratStatus(d.status);
+    }
+
+    function validQuadratStatus(s) {
+      return s == 'lobby' || s == 'playing' || s == 'distributing' || s == 'finished';
     }
   }
 }

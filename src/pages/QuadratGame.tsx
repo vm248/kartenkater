@@ -216,7 +216,7 @@ export default function QuadratGame({ room, playerId }: Props) {
 
       {/* Last action feedback */}
       {lastAction && (
-        <div className={`feedback ${lastAction.correct ? 'correct' : 'wrong'}`} style={{ marginBottom: '0.75rem' }}>
+        <div key={JSON.stringify(lastAction)} className={`feedback ${lastAction.correct ? 'correct' : 'wrong'}`} style={{ marginBottom: '0.75rem' }}>
           {lastAction.correct
             ? `✅ ${lastAction.playerName}: „${lastAction.guess}" – Richtig!`
             : `❌ ${lastAction.playerName}: „${lastAction.guess}" – Falsch! ${lastAction.drinkCount}× trinken.`}

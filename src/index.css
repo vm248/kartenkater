@@ -177,8 +177,8 @@ button.danger:hover:not(:disabled) {
   background: var(--card-inner);
 }
 
-.feedback.correct { color: #27ae60; }
-.feedback.wrong { color: #e74c3c; }
+.feedback.correct { color: #27ae60; animation: flashCorrect 0.5s ease-out; }
+.feedback.wrong { color: #e74c3c; animation: flashWrong 0.5s ease-out; }
 
 .card-style {
   width: 52px;
@@ -392,6 +392,16 @@ button.danger:hover:not(:disabled) {
   font-size: 18px;
   padding: 2rem 0;
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes flashCorrect {
+  0% { background: rgba(39, 174, 96, 0.35); transform: scale(1.04); }
+  100% { background: var(--card-inner); transform: scale(1); }
+}
+
+@keyframes flashWrong {
+  0% { background: rgba(231, 76, 60, 0.35); transform: scale(1.04); }
+  100% { background: var(--card-inner); transform: scale(1); }
 }
 
 @keyframes pulse {

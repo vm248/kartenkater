@@ -56,7 +56,7 @@ export default function Game({ room, playerId }: Props) {
         <h2>{STEP_NAMES[step]}</h2>
 
         {la && (
-          <div className={`feedback ${la.correct ? 'correct' : 'wrong'}`}>
+          <div key={JSON.stringify(la)} className={`feedback ${la.correct ? 'correct' : 'wrong'}`}>
             {la.message}
             <div style={{ marginTop: 6 }}>
               <CardComponent card={la.card} />

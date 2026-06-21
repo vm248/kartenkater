@@ -13,6 +13,7 @@ export default function Lobby({ room, playerId }: Props) {
   const [settings, setSettings] = useState<GameSettings>(room.settings);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [leaveMsg, setLeaveMsg] = useState('');
   const prevOrderRef = useRef<string[]>(room.playerOrder);
   const prevPlayersRef = useRef(room.players);
@@ -45,15 +46,30 @@ export default function Lobby({ room, playerId }: Props) {
     });
   }
 
+  async function handleShareLink() {
+    const url = `${window.location.origin}${window.location.pathname}?join=${room.id}&game=busfahren`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Kartenkater – Busfahren', url }); } catch {}
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      });
+    }
+  }
+
   return (
     <div className="game-area">
       <h1>🚌 Busfahren</h1>
 
       <h2>Raum-Code</h2>
       <div className="room-code">{room.id}</div>
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: '1rem' }}>
         <button className="copy-btn" onClick={handleCopy}>
           {copied ? '✅ Kopiert!' : '📋 Code kopieren'}
+        </button>
+        <button className="copy-btn" onClick={handleShareLink}>
+          {linkCopied ? '✅ Link kopiert!' : '🔗 Link teilen'}
         </button>
       </div>
 

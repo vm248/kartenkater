@@ -15,6 +15,7 @@ import QuadratGame from './pages/QuadratGame';
 
 export default function App() {
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
+  const [initialCode, setInitialCode] = useState<string | null>(null);
 
   const [roomId, setRoomId] = useState<string | null>(
     () => sessionStorage.getItem('busfahren_room')
@@ -30,8 +31,31 @@ export default function App() {
     () => localStorage.getItem('busfahren_dark') === '1'
   );
   const [popupCopied, setPopupCopied] = useState(false);
+  const [offline, setOffline] = useState(!navigator.onLine);
 
   const playerId = getPlayerId();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const join = params.get('join');
+    const game = params.get('game');
+    if (join && (game === 'busfahren' || game === 'quadrat')) {
+      setInitialCode(join.toUpperCase());
+      setSelectedGame(game);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setOffline(false);
+    const handleOffline = () => setOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle('dark', dark);
@@ -122,6 +146,17 @@ export default function App() {
 
   return (
     <>
+      {offline && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300,
+          background: '#c0392b', color: '#fff',
+          textAlign: 'center', padding: '10px 16px',
+          fontSize: 14, fontWeight: 600,
+          animation: 'slideDown 0.3s ease-out',
+        }}>
+          ⚠️ Verbindung unterbrochen – wird wiederhergestellt…
+        </div>
+      )}
       <div style={{ position: 'fixed', top: 12, right: 12, zIndex: 100, display: 'flex', gap: 8 }}>
         <button
           className="icon-btn"
@@ -173,10 +208,10 @@ export default function App() {
 
       {!inRoom && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
       {!inRoom && selectedGame === 'busfahren' && (
-        <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} />
+        <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
       )}
       {!inRoom && selectedGame === 'quadrat' && (
-        <QuadratHome onJoined={handleQuadratJoined} onBack={() => setSelectedGame(null)} />
+        <QuadratHome onJoined={handleQuadratJoined} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
       )}
       {showLobby && <Lobby room={room} playerId={playerId} />}
       {showGame && <Game room={room} playerId={playerId} />}

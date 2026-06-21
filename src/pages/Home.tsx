@@ -4,11 +4,12 @@ import { createRoom, joinRoom, getPlayerId } from '../gameActions';
 interface Props {
   onJoined: (roomId: string) => void;
   onBack: () => void;
+  initialCode?: string;
 }
 
-export default function Home({ onJoined, onBack }: Props) {
+export default function Home({ onJoined, onBack, initialCode }: Props) {
   const [name, setName] = useState(() => localStorage.getItem('busfahren_name') ?? '');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 

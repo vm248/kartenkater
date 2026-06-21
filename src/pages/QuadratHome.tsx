@@ -4,11 +4,12 @@ import { createQuadratRoom, joinQuadratRoom, getPlayerId } from '../quadratActio
 interface Props {
   onJoined: (roomId: string) => void;
   onBack: () => void;
+  initialCode?: string;
 }
 
-export default function QuadratHome({ onJoined, onBack }: Props) {
+export default function QuadratHome({ onJoined, onBack, initialCode }: Props) {
   const [name, setName] = useState(() => localStorage.getItem('busfahren_name') ?? '');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const playerId = getPlayerId();
