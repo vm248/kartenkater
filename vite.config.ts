@@ -11,8 +11,8 @@ export default defineConfig({
         name: 'Kartenkater',
         short_name: 'Kartenkater',
         description: 'Multiplayer Trinkkartenspiele',
-        theme_color: '#007acc',
-        background_color: '#101820',
+        theme_color: '#111111',
+        background_color: '#111111',
         display: 'standalone',
         orientation: 'portrait',
         icons: [
