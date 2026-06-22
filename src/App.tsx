@@ -7,7 +7,7 @@ import type { CircleRoom } from './circleTypes';
 import { getPlayerId, leaveRoom } from './gameActions';
 import { leaveQuadratRoom } from './quadratActions';
 import { leaveCircleRoom } from './circleActions';
-import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check } from 'lucide-react';
+import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X } from 'lucide-react';
 import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
@@ -61,6 +61,7 @@ export default function App() {
 
   const [popupCopied, setPopupCopied] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [showInfo, setShowInfo] = useState(false);
 
   const playerId = getPlayerId();
 
@@ -348,12 +349,16 @@ export default function App() {
           )}
         </div>
 
-        {/* Center: home (only when in a room/game) */}
-        {(selectedGame || inRoom) && (
+        {/* Center: info on main menu, home when in game/room */}
+        {!selectedGame && !inRoom ? (
+          <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(true)} title="App installieren">
+            <Info size={17} strokeWidth={2} />
+          </button>
+        ) : (selectedGame || inRoom) ? (
           <button className="icon-btn icon-btn-ghost" onClick={handleUserLeave} title="Hauptmenü">
             <HomeIcon size={17} strokeWidth={2} />
           </button>
-        )}
+        ) : null}
 
         {/* Right: dark / light mode */}
         <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
@@ -394,6 +399,56 @@ export default function App() {
             >
               Hauptmenü
             </button>
+          </div>
+        </div>
+      )}
+
+      {showInfo && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 200, padding: '1rem',
+          }}
+          onClick={() => setShowInfo(false)}
+        >
+          <div
+            style={{
+              background: 'var(--card)', borderRadius: 24, padding: '22px 20px 20px',
+              maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Als App installieren</span>
+              <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(false)}>
+                <X size={17} strokeWidth={2} />
+              </button>
+            </div>
+
+            <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>Android</p>
+              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                <li>Seite in <strong style={{ color: 'var(--text)' }}>Chrome</strong> öffnen</li>
+                <li>Drei-Punkte-Menü <strong style={{ color: 'var(--text)' }}>⋮</strong> antippen</li>
+                <li><strong style={{ color: 'var(--text)' }}>"App installieren"</strong> wählen</li>
+                <li>Bestätigen – fertig</li>
+              </ol>
+            </div>
+
+            <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>iPhone / iPad</p>
+              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                <li>Seite in <strong style={{ color: 'var(--text)' }}>Safari</strong> öffnen <span style={{ fontSize: 12 }}>(nicht Chrome!)</span></li>
+                <li>Teilen-Symbol <strong style={{ color: 'var(--text)' }}>↑</strong> unten antippen</li>
+                <li><strong style={{ color: 'var(--text)' }}>"Zum Home-Bildschirm"</strong> wählen</li>
+                <li>Namen bestätigen – fertig</li>
+              </ol>
+            </div>
+
+            <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
+              Die App läuft dann ohne Browser-Leiste – wie eine native App.
+            </p>
           </div>
         </div>
       )}
