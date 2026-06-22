@@ -62,6 +62,7 @@ export default function App() {
   const [popupCopied, setPopupCopied] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [showInfo, setShowInfo] = useState(false);
+  const [phase1HandoffReady, setPhase1HandoffReady] = useState(false);
   const [showWelcome, setShowWelcome] = useState(
     () => !localStorage.getItem('busfahren_welcomed')
   );
@@ -263,7 +264,9 @@ export default function App() {
     : null;
   const needsHandoff = localTurnId !== null
     && localTurnId !== localActiveId
-    && localPlayerIds.includes(localTurnId);
+    && localPlayerIds.includes(localTurnId)
+    // In Phase 1 the card result must be acknowledged before handing off the device
+    && (room?.status !== 'phase1' || phase1HandoffReady);
   const activeRoomForHandoff = room ?? quadratRoom ?? circleRoom;
 
   const currentTheme = THEMES.find(t => t.id === theme) ?? THEMES[0];
@@ -549,7 +552,10 @@ export default function App() {
           <h1 style={{ fontSize: 34, margin: '4px 0 24px', color: 'var(--primary)' }}>
             {activeRoomForHandoff.players[localTurnId]?.name}
           </h1>
-          <button style={{ maxWidth: 280 }} onClick={() => setLocalActiveId(localTurnId)}>
+          <button style={{ maxWidth: 280 }} onClick={() => {
+            setLocalActiveId(localTurnId);
+            setPhase1HandoffReady(false);
+          }}>
             Anzeigen
           </button>
         </div>
@@ -566,7 +572,7 @@ export default function App() {
         <CircleHome onJoined={(id, ids) => handleCircleJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
       )}
       {showLobby        && <Lobby        room={room}        playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
-      {showGame         && <Game         room={room}        playerId={effectivePlayerId} />}
+      {showGame         && <Game         room={room}        playerId={effectivePlayerId} onLocalTurnDone={isLocalMode ? () => setPhase1HandoffReady(true) : undefined} />}
       {showQuadratLobby && <QuadratLobby room={quadratRoom} playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
       {showQuadratGame  && <QuadratGame  room={quadratRoom} playerId={effectivePlayerId} />}
       {showCircleLobby  && <CircleLobby  room={circleRoom}  playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
