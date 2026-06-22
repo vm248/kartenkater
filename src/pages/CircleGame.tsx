@@ -76,6 +76,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
     const pa = room.pendingAction;
     const isActor = pa.playerId === playerId;
     const card = pa.card;
+    const customRule = (room.cardRules ?? {})[String(card.value)];
 
     return (
       <div className="game-area" style={{
@@ -123,56 +124,67 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
           background: 'var(--card-inner)', borderRadius: 14,
           padding: '14px 20px', textAlign: 'center', maxWidth: 300, width: '100%',
         }}>
-          {pa.type === 'number' && !pa.distribute && (
+          {customRule ? (
             <>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Trink {pa.sips} Schlücke!</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Schwarze Karte – selbst trinken</p>
-            </>
-          )}
-          {pa.type === 'number' && pa.distribute && (
-            <>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{pa.sips} Schlücke verteilen!</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Rote Karte – gib {pa.sips} Schlücke an andere</p>
-            </>
-          )}
-          {pa.type === 'jack' && (
-            <>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Daumenking!</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-                {pa.playerName} ist jetzt Daumenking (3×)
+              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Eigene Regel!</p>
+              <p style={{ margin: '8px 0 0', fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
+                {customRule}
               </p>
             </>
-          )}
-          {pa.type === 'queen' && (
+          ) : (
             <>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Regelkarte!</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-                {pa.playerName} denkt sich eine Regel aus – gilt bis zur nächsten Dame.
-              </p>
-            </>
-          )}
-          {pa.type === 'king' && (
-            <>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Kategorie!</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-                {pa.playerName} wählt eine Kategorie – reihum antworten, wer nicht kann trinkt.
-              </p>
-            </>
-          )}
-          {pa.type === 'ace_normal' && (
-            <>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Ass #{room.acesDrawn}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-                Noch {4 - room.acesDrawn} Ass{4 - room.acesDrawn !== 1 ? 'e' : ''} bis zum Exen
-              </p>
-            </>
-          )}
-          {pa.type === 'ace_ex' && (
-            <>
-              <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>4. Ass – Exen!</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-                {pa.playerName} muss das Glas leeren!
-              </p>
+              {pa.type === 'number' && !pa.distribute && (
+                <>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Trink {pa.sips} Schlücke!</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Schwarze Karte – selbst trinken</p>
+                </>
+              )}
+              {pa.type === 'number' && pa.distribute && (
+                <>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{pa.sips} Schlücke verteilen!</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Rote Karte – gib {pa.sips} Schlücke an andere</p>
+                </>
+              )}
+              {pa.type === 'jack' && (
+                <>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Daumenking!</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                    {pa.playerName} ist jetzt Daumenking (3×)
+                  </p>
+                </>
+              )}
+              {pa.type === 'queen' && (
+                <>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Regelkarte!</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                    {pa.playerName} denkt sich eine Regel aus – gilt bis zur nächsten Dame.
+                  </p>
+                </>
+              )}
+              {pa.type === 'king' && (
+                <>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Kategorie!</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                    {pa.playerName} wählt eine Kategorie – reihum antworten, wer nicht kann trinkt.
+                  </p>
+                </>
+              )}
+              {pa.type === 'ace_normal' && (
+                <>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Ass #{room.acesDrawn}</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                    Noch {4 - room.acesDrawn} Ass{4 - room.acesDrawn !== 1 ? 'e' : ''} bis zum Exen
+                  </p>
+                </>
+              )}
+              {pa.type === 'ace_ex' && (
+                <>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>4. Ass – Exen!</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                    {pa.playerName} muss das Glas leeren!
+                  </p>
+                </>
+              )}
             </>
           )}
         </div>
