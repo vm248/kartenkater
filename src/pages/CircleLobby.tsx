@@ -1,13 +1,50 @@
 import { useState, useEffect, useRef } from 'react';
-import { Circle, Copy, Check, Link, LogOut, Play, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
+import { Circle, Copy, Check, Link, LogOut, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import type { CircleRoom } from '../circleTypes';
-import { startCircleGame, kickCirclePlayer, updateCustomRules } from '../circleActions';
+import { startCircleGame, kickCirclePlayer, updateCardRules } from '../circleActions';
 import { playerColor } from '../playerColors';
 
 interface Props {
   room: CircleRoom;
   playerId: string;
 }
+
+const CARD_VALUES = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+
+const CARD_DISPLAY: Record<string, string> = {
+  '2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','10':'10',
+  'J':'Bube','Q':'Dame','K':'König','A':'Ass',
+};
+
+const CARD_STANDARD_RULES: Record<string, string> = {
+  '2':  'Schwarz: 2 trinken · Rot: 2 verteilen',
+  '3':  'Schwarz: 3 trinken · Rot: 3 verteilen',
+  '4':  'Schwarz: 4 trinken · Rot: 4 verteilen',
+  '5':  'Schwarz: 5 trinken · Rot: 5 verteilen',
+  '6':  'Schwarz: 6 trinken · Rot: 6 verteilen',
+  '7':  'Schwarz: 7 trinken · Rot: 7 verteilen',
+  '8':  'Schwarz: 8 trinken · Rot: 8 verteilen',
+  '9':  'Schwarz: 9 trinken · Rot: 9 verteilen',
+  '10': 'Schwarz: 10 trinken · Rot: 10 verteilen',
+  'J':  'Daumenking (3× nutzbar)',
+  'Q':  'Regel aufstellen',
+  'K':  'Kategorie nennen',
+  'A':  '1.–3. Ass normal · 4. Ass: alle exen',
+};
+
+const RULE_PRESETS = [
+  'Selbst trinken',
+  'Verteilen',
+  'Alle trinken',
+  'Alle exen',
+  'Waterfall',
+  'Regel aufstellen',
+  'Kategorie',
+  'Daumenking',
+  'Wahrheit oder Pflicht',
+  'Niemals hab ich...',
+  'Nichts',
+];
 
 export default function CircleLobby({ room, playerId }: Props) {
   const isHost = room.hostId === playerId;
@@ -109,7 +146,7 @@ export default function CircleLobby({ room, playerId }: Props) {
         </p>
       </div>
 
-      <CustomRulesSection room={room} isHost={isHost} />
+      <CardRulesSection room={room} isHost={isHost} />
 
       {isHost && (
         <>
@@ -131,20 +168,19 @@ export default function CircleLobby({ room, playerId }: Props) {
   );
 }
 
-function CustomRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean }) {
-  const rules = room.customRules ?? [];
-  const [open, setOpen] = useState(rules.length > 0);
-  const [input, setInput] = useState('');
+function CardRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean }) {
+  const [open, setOpen] = useState(false);
+  const cardRules = room.cardRules ?? {};
+  const customCount = Object.keys(cardRules).length;
 
-  function handleAdd() {
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    updateCustomRules(room, [...rules, trimmed]);
-    setInput('');
-  }
-
-  function handleRemove(idx: number) {
-    updateCustomRules(room, rules.filter((_, i) => i !== idx));
+  function handleChange(cardValue: string, rule: string) {
+    const updated = { ...cardRules };
+    if (!rule) {
+      delete updated[cardValue];
+    } else {
+      updated[cardValue] = rule;
+    }
+    updateCardRules(room, updated);
   }
 
   return (
@@ -153,7 +189,6 @@ function CustomRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolea
       border: '1.5px solid var(--border)', borderRadius: 16,
       background: 'var(--card-inner)', overflow: 'hidden',
     }}>
-      {/* Header – always visible, tap to expand */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{
@@ -164,13 +199,13 @@ function CustomRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolea
         }}
       >
         <span style={{ fontWeight: 700, fontSize: 13 }}>
-          Eigene Regeln
-          {rules.length > 0 && (
+          Regeln anpassen
+          {customCount > 0 && (
             <span style={{
               marginLeft: 8, background: 'var(--primary)', color: 'var(--btn-color)',
               borderRadius: 99, fontSize: 11, fontWeight: 700, padding: '1px 7px',
             }}>
-              {rules.length}
+              {customCount} geändert
             </span>
           )}
         </span>
@@ -178,52 +213,51 @@ function CustomRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolea
       </button>
 
       {open && (
-        <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {rules.length === 0 && (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              Noch keine eigenen Regeln.
-            </p>
-          )}
-          {rules.map((rule, idx) => (
-            <div key={idx} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: 'var(--card)', borderRadius: 10, padding: '8px 12px',
-            }}>
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{rule}</span>
-              {isHost && (
-                <button
-                  onClick={() => handleRemove(idx)}
-                  className="danger"
-                  style={{ width: 'auto', padding: '3px 8px', fontSize: 12, margin: 0, flexShrink: 0 }}
-                >
-                  <X size={12} strokeWidth={2.5} />
-                </button>
-              )}
-            </div>
-          ))}
-
-          {isHost && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAdd()}
-                placeholder="Neue Regel…"
-                style={{
-                  flex: 1, background: 'var(--card)', border: '1.5px solid var(--border)',
-                  borderRadius: 10, padding: '8px 12px', fontSize: 13,
-                  color: 'var(--text)', outline: 'none', fontFamily: 'inherit',
-                }}
-              />
-              <button
-                onClick={handleAdd}
-                disabled={!input.trim()}
-                style={{ width: 'auto', padding: '8px 12px', margin: 0, flexShrink: 0 }}
-              >
-                <Plus size={15} strokeWidth={2.5} />
-              </button>
-            </div>
-          )}
+        <div style={{ padding: '0 10px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {CARD_VALUES.map(cv => {
+            const current = cardRules[cv] ?? '';
+            const isModified = !!current;
+            return (
+              <div key={cv} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'var(--card)', borderRadius: 10, padding: '7px 10px',
+                border: `1.5px solid ${isModified ? 'var(--primary)' : 'var(--border)'}`,
+              }}>
+                <span style={{
+                  fontSize: 12, fontWeight: 800,
+                  color: isModified ? 'var(--primary)' : 'var(--text-muted)',
+                  minWidth: 34, flexShrink: 0,
+                }}>
+                  {CARD_DISPLAY[cv]}
+                </span>
+                {isHost ? (
+                  <select
+                    value={current}
+                    onChange={e => handleChange(cv, e.target.value)}
+                    style={{
+                      flex: 1, background: 'var(--input-bg)',
+                      border: '1.5px solid var(--border)', borderRadius: 8,
+                      padding: '4px 6px', fontSize: 12, fontWeight: 600,
+                      color: 'var(--text)', fontFamily: 'inherit', cursor: 'pointer',
+                      minWidth: 0,
+                    }}
+                  >
+                    <option value="">Standard – {CARD_STANDARD_RULES[cv]}</option>
+                    {RULE_PRESETS.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span style={{
+                    flex: 1, fontSize: 12, fontWeight: 600,
+                    color: isModified ? 'var(--text)' : 'var(--text-muted)',
+                  }}>
+                    {current || CARD_STANDARD_RULES[cv]}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

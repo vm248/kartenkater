@@ -46,6 +46,7 @@ function emptyRoom(code: string, hostId: string, players: Record<string, Player>
     lastQueenName: null,
     gapBroken: false,
     customRules: [],
+    cardRules: {},
     pendingAction: null,
     createdAt: Date.now(),
   };
@@ -226,6 +227,10 @@ export async function confirmAction(room: CircleRoom): Promise<void> {
 
 export async function updateCustomRules(room: CircleRoom, rules: string[]): Promise<void> {
   await updateDoc(doc(db, 'circle', room.id), { customRules: rules });
+}
+
+export async function updateCardRules(room: CircleRoom, cardRules: Record<string, string>): Promise<void> {
+  await updateDoc(doc(db, 'circle', room.id), { cardRules });
 }
 
 export async function restartCircleGame(room: CircleRoom): Promise<void> {

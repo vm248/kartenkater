@@ -49,6 +49,7 @@ export interface CircleRoom {
   gapBroken: boolean;
 
   customRules: string[];
+  cardRules: Record<string, string>;
 
   pendingAction: PendingCircleAction | null;
   createdAt: number;
