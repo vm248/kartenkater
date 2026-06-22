@@ -423,13 +423,34 @@ export default function App() {
             animation: 'fadeIn 0.3s ease',
           }}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 16, margin: '0 auto 14px',
-                background: 'var(--gradient)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{ fontSize: 28, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', fontFamily: 'inherit' }}>K</span>
-              </div>
+              <svg viewBox="0 0 100 100" width="88" height="88" style={{ display: 'block', margin: '0 auto 14px', overflow: 'visible' }}>
+                {/* Back card: right, rotated clockwise */}
+                <g transform="translate(60,50) rotate(13)">
+                  <rect x="-28" y="-38" width="56" height="76" rx="5"
+                        fill="white" stroke="var(--primary)" strokeWidth="3.2"/>
+                  {/* Spade (filled) */}
+                  <g transform="translate(0,3) scale(0.165)">
+                    <path fill="var(--primary)"
+                          d="M0-95 C52-95 92-45 92 8 C92 50 62 68 26 58 C32 72 36 86 50 95 L-50 95 C-36 86-32 72-26 58 C-62 68-92 50-92 8 C-92-45-52-95 0-95 Z"/>
+                  </g>
+                  <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  <g transform="rotate(180)">
+                    <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  </g>
+                </g>
+                {/* Front card: left, rotated counter-clockwise (Ace of Hearts) */}
+                <g transform="translate(40,52) rotate(-9)">
+                  <rect x="-28" y="-38" width="56" height="76" rx="5"
+                        fill="white" stroke="var(--primary)" strokeWidth="3.2"/>
+                  {/* Heart (outline) */}
+                  <path d="M0 15 C-1 12-19 2-19-8 C-19-19-12-24 0-14 C12-24 19-19 19-8 C19 2 1 12 0 15 Z"
+                        fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinejoin="round"/>
+                  <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  <g transform="rotate(180)">
+                    <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  </g>
+                </g>
+              </svg>
               <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--primary)' }}>
                 Willkommen bei Kartenkater!
               </h2>
