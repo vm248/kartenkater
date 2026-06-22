@@ -299,66 +299,60 @@ export default function App() {
         zIndex: 100, width: 'calc(100% - 24px)', maxWidth: 480,
         background: 'var(--card)', border: '1.5px solid var(--border)',
         borderRadius: 20, boxShadow: 'var(--shadow-sm)',
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
-        alignItems: 'center', padding: '0 16px', height: 48,
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', padding: '0 8px', height: 48,
       }}>
-        {/* Left third: color theme picker */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <div ref={themePickerRef} style={{ position: 'relative' }}>
-            <button className="icon-btn" onClick={() => setShowThemePicker(p => !p)} title="Farbthema">
-              <span style={{
-                display: 'inline-block', width: 14, height: 14, borderRadius: '50%',
-                background: `linear-gradient(135deg, ${currentTheme.colors[0]}, ${currentTheme.colors[1]})`,
-                verticalAlign: 'middle',
-              }} />
-            </button>
-            {showThemePicker && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 8px)', left: 0,
-                background: 'var(--card)', borderRadius: 20, padding: '10px',
-                border: '1.5px solid var(--border)', boxShadow: 'var(--shadow)',
-                display: 'flex', flexDirection: 'column', gap: 5, zIndex: 300, minWidth: 148,
-              }}>
-                {THEMES.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => { setTheme(t.id); setShowThemePicker(false); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      background: theme === t.id ? 'var(--card-inner)' : 'transparent',
-                      border: `2px solid ${theme === t.id ? 'var(--primary)' : 'transparent'}`,
-                      borderRadius: 100, padding: '7px 12px', cursor: 'pointer', width: '100%',
-                      color: 'var(--text)', fontSize: 13, fontWeight: 700,
-                      margin: 0, boxShadow: 'none', transition: 'all 0.15s',
-                    }}
-                  >
-                    <div style={{
-                      width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                      background: `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})`,
-                    }} />
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Center: home */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          {(selectedGame || inRoom) && (
-            <button className="icon-btn" onClick={handleUserLeave} title="Hauptmenü">
-              <HomeIcon size={17} strokeWidth={2} />
-            </button>
+        {/* Left: color theme picker */}
+        <div ref={themePickerRef} style={{ position: 'relative' }}>
+          <button className="icon-btn icon-btn-ghost" onClick={() => setShowThemePicker(p => !p)} title="Farbthema">
+            <span style={{
+              display: 'inline-block', width: 14, height: 14, borderRadius: '50%',
+              background: `linear-gradient(135deg, ${currentTheme.colors[0]}, ${currentTheme.colors[1]})`,
+              verticalAlign: 'middle',
+            }} />
+          </button>
+          {showThemePicker && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+              background: 'var(--card)', borderRadius: 20, padding: '10px',
+              border: '1.5px solid var(--border)', boxShadow: 'var(--shadow)',
+              display: 'flex', flexDirection: 'column', gap: 5, zIndex: 300, minWidth: 148,
+            }}>
+              {THEMES.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { setTheme(t.id); setShowThemePicker(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    background: theme === t.id ? 'var(--card-inner)' : 'transparent',
+                    border: `2px solid ${theme === t.id ? 'var(--primary)' : 'transparent'}`,
+                    borderRadius: 100, padding: '7px 12px', cursor: 'pointer', width: '100%',
+                    color: 'var(--text)', fontSize: 13, fontWeight: 700,
+                    margin: 0, boxShadow: 'none', transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    background: `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})`,
+                  }} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
-        {/* Right third: dark / light mode */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <button className="icon-btn" onClick={() => setDark(d => !d)} title="Dark Mode">
-            {dark ? <Sun size={17} strokeWidth={2} /> : <Moon size={17} strokeWidth={2} />}
+        {/* Center: home (only when in a room/game) */}
+        {(selectedGame || inRoom) && (
+          <button className="icon-btn icon-btn-ghost" onClick={handleUserLeave} title="Hauptmenü">
+            <HomeIcon size={17} strokeWidth={2} />
           </button>
-        </div>
+        )}
+
+        {/* Right: dark / light mode */}
+        <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
+          {dark ? <Sun size={17} strokeWidth={2} /> : <Moon size={17} strokeWidth={2} />}
+        </button>
       </div>
 
       {/* Too few players popup */}

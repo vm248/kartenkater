@@ -293,6 +293,20 @@ button.danger:hover:not(:disabled) { opacity: 0.85; }
   box-shadow: 0 4px 14px rgba(0,0,0,0.18);
 }
 
+/* Ghost-Variante für die Top-Bar */
+.icon-btn.icon-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.icon-btn.icon-btn-ghost:hover:not(:disabled) {
+  background: var(--card-inner);
+  border-color: transparent;
+  color: var(--primary);
+  box-shadow: none;
+  transform: none;
+}
+
 /* ── Copy button ────────────────────────────────────────── */
 .copy-btn {
   background: transparent;
