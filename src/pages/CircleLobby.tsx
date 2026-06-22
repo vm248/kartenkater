@@ -32,19 +32,6 @@ const CARD_STANDARD_RULES: Record<string, string> = {
   'A':  '1.–3. Ass normal · 4. Ass: alle exen',
 };
 
-const RULE_PRESETS = [
-  'Selbst trinken',
-  'Verteilen',
-  'Alle trinken',
-  'Alle exen',
-  'Waterfall',
-  'Regel aufstellen',
-  'Kategorie',
-  'Daumenking',
-  'Wahrheit oder Pflicht',
-  'Niemals hab ich...',
-  'Nichts',
-];
 
 export default function CircleLobby({ room, playerId }: Props) {
   const isHost = room.hostId === playerId;
@@ -231,22 +218,20 @@ function CardRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean 
                   {CARD_DISPLAY[cv]}
                 </span>
                 {isHost ? (
-                  <select
+                  <input
+                    type="text"
                     value={current}
                     onChange={e => handleChange(cv, e.target.value)}
+                    placeholder={CARD_STANDARD_RULES[cv]}
                     style={{
                       flex: 1, background: 'var(--input-bg)',
                       border: '1.5px solid var(--border)', borderRadius: 8,
-                      padding: '4px 6px', fontSize: 12, fontWeight: 600,
-                      color: 'var(--text)', fontFamily: 'inherit', cursor: 'pointer',
-                      minWidth: 0,
+                      padding: '4px 8px', fontSize: 12, fontWeight: 600,
+                      color: 'var(--text)', fontFamily: 'inherit',
+                      minWidth: 0, outline: 'none', margin: 0,
+                      textAlign: 'left',
                     }}
-                  >
-                    <option value="">Standard – {CARD_STANDARD_RULES[cv]}</option>
-                    {RULE_PRESETS.map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
+                  />
                 ) : (
                   <span style={{
                     flex: 1, fontSize: 12, fontWeight: 600,
