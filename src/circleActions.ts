@@ -121,6 +121,10 @@ export async function leaveCircleRoom(room: CircleRoom, playerId: string): Promi
     update.daumenKingId = null;
     update.daumenKingUses = 0;
   }
+  // If the leaving player was the one who drew a card, clear the overlay so the game isn't locked
+  if (room.pendingAction?.playerId === playerId) {
+    update.pendingAction = null;
+  }
   if (room.status === 'playing') {
     const idx = room.playerOrder.indexOf(playerId);
     let ci = room.currentPlayerIndex;
@@ -204,13 +208,12 @@ export async function drawCard(
 }
 
 // Daumenking taps this to track one use (actual game is verbal)
-export async function useDaumen(room: CircleRoom, playerId: string): Promise<void> {
-  if (room.daumenKingId !== playerId) return;
+export async function useDaumen(room: CircleRoom, kingId: string): Promise<void> {
   if (room.daumenKingUses <= 0) return;
   const newUses = room.daumenKingUses - 1;
   await updateDoc(doc(db, 'circle', room.id), {
     daumenKingUses: newUses,
-    daumenKingId: newUses <= 0 ? null : room.daumenKingId,
+    daumenKingId: newUses <= 0 ? null : kingId,
   });
 }
 

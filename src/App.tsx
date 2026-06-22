@@ -117,6 +117,8 @@ export default function App() {
         const data = snap.data() as GameRoom;
         if (!data.playerOrder.includes(playerId)) { handleLeave(); return; }
         setRoom(data);
+      } else {
+        handleLeave();
       }
     });
     return unsub;
@@ -130,6 +132,8 @@ export default function App() {
         const data = snap.data() as QuadratRoom;
         if (!data.playerOrder.includes(playerId)) { handleLeave(); return; }
         setQuadratRoom(data);
+      } else {
+        handleLeave();
       }
     });
     return unsub;
@@ -143,6 +147,8 @@ export default function App() {
         const data = snap.data() as CircleRoom;
         if (!data.playerOrder.includes(playerId)) { handleLeave(); return; }
         setCircleRoom(data);
+      } else {
+        handleLeave();
       }
     });
     return unsub;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Circle, Copy, Check, Link, LogOut, Play, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { CircleRoom } from '../circleTypes';
 import { startCircleGame, kickCirclePlayer, updateCardRules } from '../circleActions';
@@ -9,11 +9,12 @@ interface Props {
   playerId: string;
 }
 
-const CARD_VALUES = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+// Keys must match CardValue from types.ts: numbers 2-10, 'B' (Bube), 'D' (Dame), 'K' (König), 'A' (Ass)
+const CARD_VALUES = ['2','3','4','5','6','7','8','9','10','B','D','K','A'];
 
 const CARD_DISPLAY: Record<string, string> = {
   '2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','10':'10',
-  'J':'Bube','Q':'Dame','K':'König','A':'Ass',
+  'B':'Bube','D':'Dame','K':'König','A':'Ass',
 };
 
 const CARD_STANDARD_RULES: Record<string, string> = {
@@ -26,8 +27,8 @@ const CARD_STANDARD_RULES: Record<string, string> = {
   '8':  'Schwarz: 8 trinken · Rot: 8 verteilen',
   '9':  'Schwarz: 9 trinken · Rot: 9 verteilen',
   '10': 'Schwarz: 10 trinken · Rot: 10 verteilen',
-  'J':  'Daumenking (3× nutzbar)',
-  'Q':  'Regel aufstellen',
+  'B':  'Daumenking (3× nutzbar)',
+  'D':  'Regel aufstellen',
   'K':  'Kategorie nennen',
   'A':  '1.–3. Ass normal · 4. Ass: alle exen',
 };
@@ -157,18 +158,27 @@ export default function CircleLobby({ room, playerId }: Props) {
 
 function CardRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean }) {
   const [open, setOpen] = useState(false);
+  const [localRules, setLocalRules] = useState<Record<string, string>>(room.cardRules ?? {});
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRules = room.cardRules ?? {};
   const customCount = Object.keys(cardRules).length;
 
-  function handleChange(cardValue: string, rule: string) {
-    const updated = { ...cardRules };
+  // Keep local state in sync when Firestore updates (e.g. from another client)
+  useEffect(() => { setLocalRules(room.cardRules ?? {}); }, [room.cardRules]);
+
+  const handleChange = useCallback((cardValue: string, rule: string) => {
+    const updated = { ...localRules };
     if (!rule) {
       delete updated[cardValue];
     } else {
       updated[cardValue] = rule;
     }
-    updateCardRules(room, updated);
-  }
+    setLocalRules(updated);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      updateCardRules(room, updated);
+    }, 500);
+  }, [localRules, room]);
 
   return (
     <div style={{
@@ -202,8 +212,8 @@ function CardRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean 
       {open && (
         <div style={{ padding: '0 10px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
           {CARD_VALUES.map(cv => {
-            const current = cardRules[cv] ?? '';
-            const isModified = !!current;
+            const current = localRules[cv] ?? '';
+            const isModified = !!cardRules[cv];
             return (
               <div key={cv} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
