@@ -21,6 +21,7 @@ import { playerColor } from '../playerColors';
 interface Props {
   room: GameRoom;
   playerId: string;
+  onLocalTurnDone?: () => void;
 }
 
 const STEP_NAMES = [
@@ -37,7 +38,7 @@ const STEP_OPTIONS = [
   ['Habe ich schon', 'Habe ich noch nicht'],
 ];
 
-export default function Game({ room, playerId }: Props) {
+export default function Game({ room, playerId, onLocalTurnDone }: Props) {
   const isHost = room.hostId === playerId;
   const { status } = room;
 
@@ -76,6 +77,11 @@ export default function Game({ room, playerId }: Props) {
               ))}
             </div>
           </>
+        ) : onLocalTurnDone && la ? (
+          // Local mode: player just made their guess, show result before handing off
+          <button onClick={onLocalTurnDone} style={{ marginTop: 8 }}>
+            <Check size={16} strokeWidth={2.5} /> Gesehen – Gerät weitergeben
+          </button>
         ) : (
           <div className="waiting-text" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <Clock size={16} strokeWidth={2} /> {currentPlayer?.name ?? '?'} ist dran…

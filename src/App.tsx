@@ -7,7 +7,7 @@ import type { CircleRoom } from './circleTypes';
 import { getPlayerId, leaveRoom } from './gameActions';
 import { leaveQuadratRoom } from './quadratActions';
 import { leaveCircleRoom } from './circleActions';
-import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check } from 'lucide-react';
+import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X } from 'lucide-react';
 import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
@@ -61,6 +61,16 @@ export default function App() {
 
   const [popupCopied, setPopupCopied] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [showInfo, setShowInfo] = useState(false);
+  const [phase1HandoffReady, setPhase1HandoffReady] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(
+    () => !localStorage.getItem('busfahren_welcomed')
+  );
+
+  function dismissWelcome() {
+    localStorage.setItem('busfahren_welcomed', '1');
+    setShowWelcome(false);
+  }
 
   const playerId = getPlayerId();
 
@@ -254,7 +264,9 @@ export default function App() {
     : null;
   const needsHandoff = localTurnId !== null
     && localTurnId !== localActiveId
-    && localPlayerIds.includes(localTurnId);
+    && localPlayerIds.includes(localTurnId)
+    // In Phase 1 the card result must be acknowledged before handing off the device
+    && (room?.status !== 'phase1' || phase1HandoffReady);
   const activeRoomForHandoff = room ?? quadratRoom ?? circleRoom;
 
   const currentTheme = THEMES.find(t => t.id === theme) ?? THEMES[0];
@@ -306,13 +318,13 @@ export default function App() {
         background: 'var(--card)', border: '1.5px solid var(--border)',
         borderRadius: 20, boxShadow: 'var(--shadow-sm)',
         display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', padding: '0 8px', height: 48,
+        justifyContent: 'space-between', padding: '0 6px', height: 52,
       }}>
         {/* Left: color theme picker */}
         <div ref={themePickerRef} style={{ position: 'relative' }}>
           <button className="icon-btn icon-btn-ghost" onClick={() => setShowThemePicker(p => !p)} title="Farbthema">
             <span style={{
-              display: 'inline-block', width: 14, height: 14, borderRadius: '50%',
+              display: 'inline-block', width: 16, height: 16, borderRadius: '50%',
               background: `linear-gradient(135deg, ${currentTheme.colors[0]}, ${currentTheme.colors[1]})`,
               verticalAlign: 'middle',
             }} />
@@ -348,16 +360,20 @@ export default function App() {
           )}
         </div>
 
-        {/* Center: home (only when in a room/game) */}
-        {(selectedGame || inRoom) && (
-          <button className="icon-btn icon-btn-ghost" onClick={handleUserLeave} title="Hauptmenü">
-            <HomeIcon size={17} strokeWidth={2} />
+        {/* Center: info on main menu, home when in game/room */}
+        {!selectedGame && !inRoom ? (
+          <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(true)} title="App installieren">
+            <Info size={20} strokeWidth={2} />
           </button>
-        )}
+        ) : (selectedGame || inRoom) ? (
+          <button className="icon-btn icon-btn-ghost" onClick={handleUserLeave} title="Hauptmenü">
+            <HomeIcon size={20} strokeWidth={2} />
+          </button>
+        ) : null}
 
         {/* Right: dark / light mode */}
         <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
-          {dark ? <Sun size={17} strokeWidth={2} /> : <Moon size={17} strokeWidth={2} />}
+          {dark ? <Sun size={20} strokeWidth={2} /> : <Moon size={20} strokeWidth={2} />}
         </button>
       </div>
 
@@ -398,6 +414,132 @@ export default function App() {
         </div>
       )}
 
+      {showWelcome && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 600, padding: '1.25rem',
+        }}>
+          <div style={{
+            background: 'var(--card)', borderRadius: 28, padding: '28px 24px 24px',
+            maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
+            animation: 'fadeIn 0.3s ease',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <svg viewBox="0 0 100 100" width="88" height="88" style={{ display: 'block', margin: '0 auto 14px', overflow: 'visible' }}>
+                {/* Back card: right, rotated clockwise */}
+                <g transform="translate(60,50) rotate(13)">
+                  <rect x="-28" y="-38" width="56" height="76" rx="5"
+                        fill="white" stroke="var(--primary)" strokeWidth="3.2"/>
+                  {/* Spade (filled) */}
+                  <g transform="translate(0,3) scale(0.165)">
+                    <path fill="var(--primary)"
+                          d="M0-95 C52-95 92-45 92 8 C92 50 62 68 26 58 C32 72 36 86 50 95 L-50 95 C-36 86-32 72-26 58 C-62 68-92 50-92 8 C-92-45-52-95 0-95 Z"/>
+                  </g>
+                  <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  <g transform="rotate(180)">
+                    <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  </g>
+                </g>
+                {/* Front card: left, rotated counter-clockwise (Ace of Hearts) */}
+                <g transform="translate(40,52) rotate(-9)">
+                  <rect x="-28" y="-38" width="56" height="76" rx="5"
+                        fill="white" stroke="var(--primary)" strokeWidth="3.2"/>
+                  {/* Heart (outline) */}
+                  <path d="M0 15 C-1 12-19 2-19-8 C-19-19-12-24 0-14 C12-24 19-19 19-8 C19 2 1 12 0 15 Z"
+                        fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinejoin="round"/>
+                  <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  <g transform="rotate(180)">
+                    <text x="-22" y="-24" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="var(--primary)">A</text>
+                  </g>
+                </g>
+              </svg>
+              <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--primary)' }}>
+                Willkommen bei Kartenkater!
+              </h2>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Multiplayer-Trinkkartenspiele für den Abend –<br />
+                Busfahren, Das Fenster und Circle.
+              </p>
+            </div>
+
+            <div style={{
+              background: 'var(--card-inner)', borderRadius: 16,
+              padding: '14px 16px', marginBottom: 16,
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+              border: '1.5px solid var(--border)',
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                background: 'var(--card)', border: '1.5px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Info size={16} strokeWidth={2} style={{ color: 'var(--primary)' }} />
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Tippe oben auf das <strong style={{ color: 'var(--text)' }}>
+                  <Info size={12} strokeWidth={2.5} style={{ verticalAlign: 'middle', marginBottom: 1 }} />
+                </strong>-Symbol um die App auf deinem Handy zu installieren – dann läuft sie wie eine native App.
+              </p>
+            </div>
+
+            <button onClick={dismissWelcome}>
+              Los geht's
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showInfo && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 200, padding: '1rem',
+          }}
+          onClick={() => setShowInfo(false)}
+        >
+          <div
+            style={{
+              background: 'var(--card)', borderRadius: 24, padding: '22px 20px 20px',
+              maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Als App installieren</span>
+              <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(false)}>
+                <X size={20} strokeWidth={2} />
+              </button>
+            </div>
+
+            <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>Android</p>
+              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                <li>Seite in <strong style={{ color: 'var(--text)' }}>Chrome</strong> öffnen</li>
+                <li>Drei-Punkte-Menü <strong style={{ color: 'var(--text)' }}>⋮</strong> antippen</li>
+                <li><strong style={{ color: 'var(--text)' }}>"App installieren"</strong> wählen</li>
+                <li>Bestätigen – fertig</li>
+              </ol>
+            </div>
+
+            <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>iPhone / iPad</p>
+              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                <li>Seite in <strong style={{ color: 'var(--text)' }}>Safari</strong> öffnen <span style={{ fontSize: 12 }}>(nicht Chrome!)</span></li>
+                <li>Teilen-Symbol <strong style={{ color: 'var(--text)' }}>↑</strong> unten antippen</li>
+                <li><strong style={{ color: 'var(--text)' }}>"Zum Home-Bildschirm"</strong> wählen</li>
+                <li>Namen bestätigen – fertig</li>
+              </ol>
+            </div>
+
+            <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
+              Die App läuft dann ohne Browser-Leiste – wie eine native App.
+            </p>
+          </div>
+        </div>
+      )}
+
       {needsHandoff && activeRoomForHandoff && localTurnId && (
         <div style={{
           position: 'fixed', inset: 0, background: 'var(--bg)',
@@ -410,7 +552,10 @@ export default function App() {
           <h1 style={{ fontSize: 34, margin: '4px 0 24px', color: 'var(--primary)' }}>
             {activeRoomForHandoff.players[localTurnId]?.name}
           </h1>
-          <button style={{ maxWidth: 280 }} onClick={() => setLocalActiveId(localTurnId)}>
+          <button style={{ maxWidth: 280 }} onClick={() => {
+            setLocalActiveId(localTurnId);
+            setPhase1HandoffReady(false);
+          }}>
             Anzeigen
           </button>
         </div>
@@ -427,7 +572,7 @@ export default function App() {
         <CircleHome onJoined={(id, ids) => handleCircleJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
       )}
       {showLobby        && <Lobby        room={room}        playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
-      {showGame         && <Game         room={room}        playerId={effectivePlayerId} />}
+      {showGame         && <Game         room={room}        playerId={effectivePlayerId} onLocalTurnDone={isLocalMode ? () => setPhase1HandoffReady(true) : undefined} />}
       {showQuadratLobby && <QuadratLobby room={quadratRoom} playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
       {showQuadratGame  && <QuadratGame  room={quadratRoom} playerId={effectivePlayerId} />}
       {showCircleLobby  && <CircleLobby  room={circleRoom}  playerId={isLocalMode ? localPlayerIds[0] : playerId} />}

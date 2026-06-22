@@ -16,6 +16,13 @@ service cloud.firestore {
       allow delete: if resource.data.playerOrder.size() <= 1;
     }
 
+    match /circle/{roomId} {
+      allow read: if true;
+      allow create: if validNewCircle();
+      allow update: if validCircleUpdate();
+      allow delete: if resource.data.playerOrder.size() <= 1;
+    }
+
     function validNewRoom() {
       let d = request.resource.data;
       return d.id == request.resource.id
@@ -69,6 +76,33 @@ service cloud.firestore {
 
     function validQuadratStatus(s) {
       return s == 'lobby' || s == 'playing' || s == 'distributing' || s == 'finished';
+    }
+
+    function validNewCircle() {
+      let d = request.resource.data;
+      return d.id == request.resource.id
+        && d.status == 'lobby'
+        && d.createdAt is int
+        && d.hostId is string
+        && d.hostId.size() > 0
+        && d.players is map
+        && d.playerOrder is list
+        && d.playerOrder.size() >= 1
+        && d.playerOrder.size() <= 12;
+    }
+
+    function validCircleUpdate() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.createdAt == old.createdAt
+        && d.id == old.id
+        && d.playerOrder is list
+        && d.playerOrder.size() <= 12
+        && validCircleStatus(d.status);
+    }
+
+    function validCircleStatus(s) {
+      return s == 'lobby' || s == 'playing' || s == 'finished';
     }
   }
 }
