@@ -62,6 +62,14 @@ export default function App() {
   const [popupCopied, setPopupCopied] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [showInfo, setShowInfo] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(
+    () => !localStorage.getItem('busfahren_welcomed')
+  );
+
+  function dismissWelcome() {
+    localStorage.setItem('busfahren_welcomed', '1');
+    setShowWelcome(false);
+  }
 
   const playerId = getPlayerId();
 
@@ -398,6 +406,61 @@ export default function App() {
               style={{ marginTop: 4 }}
             >
               Hauptmenü
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showWelcome && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 600, padding: '1.25rem',
+        }}>
+          <div style={{
+            background: 'var(--card)', borderRadius: 28, padding: '28px 24px 24px',
+            maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
+            animation: 'fadeIn 0.3s ease',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 16, margin: '0 auto 14px',
+                background: 'var(--gradient)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: 28, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', fontFamily: 'inherit' }}>K</span>
+              </div>
+              <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--primary)' }}>
+                Willkommen bei Kartenkater!
+              </h2>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Multiplayer-Trinkkartenspiele für den Abend –<br />
+                Busfahren, Das Fenster und Circle.
+              </p>
+            </div>
+
+            <div style={{
+              background: 'var(--card-inner)', borderRadius: 16,
+              padding: '14px 16px', marginBottom: 16,
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+              border: '1.5px solid var(--border)',
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                background: 'var(--card)', border: '1.5px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Info size={16} strokeWidth={2} style={{ color: 'var(--primary)' }} />
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Tippe oben auf das <strong style={{ color: 'var(--text)' }}>
+                  <Info size={12} strokeWidth={2.5} style={{ verticalAlign: 'middle', marginBottom: 1 }} />
+                </strong>-Symbol um die App auf deinem Handy zu installieren – dann läuft sie wie eine native App.
+              </p>
+            </div>
+
+            <button onClick={dismissWelcome}>
+              Los geht's
             </button>
           </div>
         </div>
