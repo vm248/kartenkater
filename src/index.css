@@ -239,6 +239,8 @@ button {
   align-items: center;
   justify-content: center;
   gap: 7px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 button:hover:not(:disabled):not(.icon-btn):not(.copy-btn) {
   opacity: 0.88;
@@ -557,11 +559,19 @@ button.danger:hover:not(:disabled) { opacity: 0.85; }
 
 /* ── Mobile ─────────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .game-area { padding: 72px 1rem 1.5rem; margin: 0; border-radius: 0; min-height: 100dvh; }
+  .game-area { padding: 76px 1rem 2rem; margin: 0; border-radius: 0; min-height: 100dvh; }
   #root { padding: 0; }
   button { padding: 17px; min-height: 54px; }
   .choices button { min-height: 52px; font-size: 15px; }
   .card-style { width: 44px; height: 62px; font-size: 16px; }
   .card-back  { width: 44px; height: 62px; }
   .bus-grid   { gap: 5px; }
+
+  /* Touch targets: minimum 44px per Apple/Android guidelines */
+  .icon-btn { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .copy-btn { min-height: 44px; padding: 10px 20px; font-size: 14px; }
+  .player-list li { padding: 0.875rem 1rem; min-height: 52px; }
+  button.danger { min-height: 44px; padding: 8px 16px; }
+  button.back-btn { min-height: 44px; }
+  button.secondary { min-height: 52px; }
 }

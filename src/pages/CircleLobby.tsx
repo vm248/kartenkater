@@ -109,7 +109,7 @@ export default function CircleLobby({ room, playerId }: Props) {
               {isHost && id !== playerId && (
                 <button
                   className="danger"
-                  style={{ width: 'auto', padding: '4px 10px', fontSize: 13, margin: 0 }}
+                  style={{ width: 'auto', padding: '8px 14px', fontSize: 13, margin: 0 }}
                   onClick={() => kickCirclePlayer(room, id)}
                 >
                   <X size={13} strokeWidth={2.5} />

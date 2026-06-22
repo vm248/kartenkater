@@ -307,13 +307,13 @@ export default function App() {
         background: 'var(--card)', border: '1.5px solid var(--border)',
         borderRadius: 20, boxShadow: 'var(--shadow-sm)',
         display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', padding: '0 8px', height: 48,
+        justifyContent: 'space-between', padding: '0 6px', height: 52,
       }}>
         {/* Left: color theme picker */}
         <div ref={themePickerRef} style={{ position: 'relative' }}>
           <button className="icon-btn icon-btn-ghost" onClick={() => setShowThemePicker(p => !p)} title="Farbthema">
             <span style={{
-              display: 'inline-block', width: 14, height: 14, borderRadius: '50%',
+              display: 'inline-block', width: 16, height: 16, borderRadius: '50%',
               background: `linear-gradient(135deg, ${currentTheme.colors[0]}, ${currentTheme.colors[1]})`,
               verticalAlign: 'middle',
             }} />
@@ -352,17 +352,17 @@ export default function App() {
         {/* Center: info on main menu, home when in game/room */}
         {!selectedGame && !inRoom ? (
           <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(true)} title="App installieren">
-            <Info size={17} strokeWidth={2} />
+            <Info size={20} strokeWidth={2} />
           </button>
         ) : (selectedGame || inRoom) ? (
           <button className="icon-btn icon-btn-ghost" onClick={handleUserLeave} title="Hauptmenü">
-            <HomeIcon size={17} strokeWidth={2} />
+            <HomeIcon size={20} strokeWidth={2} />
           </button>
         ) : null}
 
         {/* Right: dark / light mode */}
         <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
-          {dark ? <Sun size={17} strokeWidth={2} /> : <Moon size={17} strokeWidth={2} />}
+          {dark ? <Sun size={20} strokeWidth={2} /> : <Moon size={20} strokeWidth={2} />}
         </button>
       </div>
 
@@ -422,7 +422,7 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Als App installieren</span>
               <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(false)}>
-                <X size={17} strokeWidth={2} />
+                <X size={20} strokeWidth={2} />
               </button>
             </div>
 
