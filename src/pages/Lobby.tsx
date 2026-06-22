@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bus, Copy, Check, Link, LogOut, Play, AlertTriangle } from 'lucide-react';
+import { Bus, Copy, Check, Link, LogOut, Play, AlertTriangle, X } from 'lucide-react';
 import type { GameRoom, GameSettings } from '../types';
 import { updateSettings, startGame, kickPlayer } from '../gameActions';
 import { playerColor } from '../playerColors';
@@ -98,7 +98,7 @@ export default function Lobby({ room, playerId }: Props) {
                   style={{ width: 'auto', padding: '4px 10px', fontSize: 13, margin: 0 }}
                   onClick={() => kickPlayer(room, id)}
                 >
-                  ✕
+                  <X size={13} strokeWidth={2.5} />
                 </button>
               )}
             </li>

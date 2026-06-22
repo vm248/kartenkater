@@ -273,7 +273,7 @@ export default function App() {
     if (prevTurnPlayerRef.current === playerId) return;
     prevTurnPlayerRef.current = playerId;
     if ((document.hidden || !document.hasFocus()) && Notification.permission === 'granted') {
-      new Notification('Kartenkater', { body: 'Du bist dran! 🎮', icon: '/icon-192.png' });
+      new Notification('Kartenkater', { body: 'Du bist dran!', icon: '/icon-192.png' });
     }
   }, [currentTurnPlayerId]);
 

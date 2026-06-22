@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Circle, Copy, Check, Link, LogOut, Play, ChevronDown, ChevronUp } from 'lucide-react';
+import { Circle, Copy, Check, Link, LogOut, Play, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { CircleRoom } from '../circleTypes';
 import { startCircleGame, kickCirclePlayer, updateCardRules } from '../circleActions';
 import { playerColor } from '../playerColors';
@@ -111,7 +111,7 @@ export default function CircleLobby({ room, playerId }: Props) {
                   style={{ width: 'auto', padding: '4px 10px', fontSize: 13, margin: 0 }}
                   onClick={() => kickCirclePlayer(room, id)}
                 >
-                  ✕
+                  <X size={13} strokeWidth={2.5} />
                 </button>
               )}
             </li>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Grid3x3, Copy, Check, Link, LogOut, Play } from 'lucide-react';
+import { Grid3x3, Copy, Check, Link, LogOut, Play, X } from 'lucide-react';
 import type { QuadratRoom } from '../quadratTypes';
 import { startQuadratGame, kickQuadratPlayer } from '../quadratActions';
 import { playerColor } from '../playerColors';
@@ -88,7 +88,7 @@ export default function QuadratLobby({ room, playerId }: Props) {
                   style={{ width: 'auto', padding: '4px 10px', fontSize: 13, margin: 0 }}
                   onClick={() => kickQuadratPlayer(room, id)}
                 >
-                  ✕
+                  <X size={13} strokeWidth={2.5} />
                 </button>
               )}
             </li>

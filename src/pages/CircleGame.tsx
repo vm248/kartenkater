@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Circle } from 'lucide-react';
+import { Circle, Crown, ThumbsUp } from 'lucide-react';
 import type { CircleRoom } from '../circleTypes';
 import {
   drawCard, confirmAction, useDaumen, restartCircleGame,
@@ -310,10 +310,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
                       strokeWidth={isSelected ? 1.5 : 0.8}
                     />
                     {!isSelected && (
-                      <text x={0} y={2} textAnchor="middle" fontSize="7"
-                        fill="var(--border)" fontWeight="600" fontFamily="inherit">
-                        ✦
-                      </text>
+                      <circle cx={0} cy={0} r={2.5} fill="var(--border)" opacity={0.5} />
                     )}
                   </>
                 )}
@@ -371,8 +368,9 @@ function RuleBar({ queenName }: { queenName: string }) {
       padding: '8px 14px', marginBottom: 10, border: '1.5px solid var(--border)',
       gap: 8,
     }}>
+      <Crown size={14} strokeWidth={2} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>
-        👑 Aktuelle Regel: von <strong style={{ color: 'var(--text)' }}>{queenName}</strong>
+        Aktuelle Regel: von <strong style={{ color: 'var(--text)' }}>{queenName}</strong>
       </span>
     </div>
   );
@@ -393,8 +391,9 @@ function DaumenBar({ room, playerId, canUseDaumen }: {
       padding: '8px 14px', marginBottom: 10, border: '1.5px solid var(--border)',
       gap: 10,
     }}>
+      <ThumbsUp size={14} strokeWidth={2} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
       <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>
-        👍 Daumenking: <strong style={{ color: 'var(--text)' }}>{kingName}</strong>
+        Daumenking: <strong style={{ color: 'var(--text)' }}>{kingName}</strong>
         <span style={{ marginLeft: 6, opacity: 0.6 }}>({room.daumenKingUses}×)</span>
       </span>
       <button
