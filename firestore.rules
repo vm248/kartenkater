@@ -6,21 +6,24 @@ service cloud.firestore {
       allow read: if true;
       allow create: if validNewRoom();
       allow update: if validRoomUpdate();
-      allow delete: if resource.data.playerOrder.size() <= 1;
+      allow delete: if resource.data.playerOrder.size() <= 1
+                    || request.time.toMillis() > resource.data.createdAt + 86400000;
     }
 
     match /quadrat/{roomId} {
       allow read: if true;
       allow create: if validNewQuadrat();
       allow update: if validQuadratUpdate();
-      allow delete: if resource.data.playerOrder.size() <= 1;
+      allow delete: if resource.data.playerOrder.size() <= 1
+                    || request.time.toMillis() > resource.data.createdAt + 86400000;
     }
 
     match /circle/{roomId} {
       allow read: if true;
       allow create: if validNewCircle();
       allow update: if validCircleUpdate();
-      allow delete: if resource.data.playerOrder.size() <= 1;
+      allow delete: if resource.data.playerOrder.size() <= 1
+                    || request.time.toMillis() > resource.data.createdAt + 86400000;
     }
 
     function validNewRoom() {

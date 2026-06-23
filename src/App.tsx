@@ -33,17 +33,17 @@ export default function App() {
   const [initialCode, setInitialCode] = useState<string | null>(null);
 
   const [roomId, setRoomId] = useState<string | null>(
-    () => sessionStorage.getItem('busfahren_room')
+    () => localStorage.getItem('busfahren_room')
   );
   const [room, setRoom] = useState<GameRoom | null>(null);
 
   const [quadratRoomId, setQuadratRoomId] = useState<string | null>(
-    () => sessionStorage.getItem('quadrat_room')
+    () => localStorage.getItem('quadrat_room')
   );
   const [quadratRoom, setQuadratRoom] = useState<QuadratRoom | null>(null);
 
   const [circleRoomId, setCircleRoomId] = useState<string | null>(
-    () => sessionStorage.getItem('circle_room')
+    () => localStorage.getItem('circle_room')
   );
   const [circleRoom, setCircleRoom] = useState<CircleRoom | null>(null);
 
@@ -121,7 +121,7 @@ export default function App() {
 
   useEffect(() => {
     if (!roomId) return;
-    sessionStorage.setItem('busfahren_room', roomId);
+    localStorage.setItem('busfahren_room', roomId);
     const unsub = onSnapshot(doc(db, 'rooms', roomId), snap => {
       if (snap.exists()) {
         const data = snap.data() as GameRoom;
@@ -136,7 +136,7 @@ export default function App() {
 
   useEffect(() => {
     if (!quadratRoomId) return;
-    sessionStorage.setItem('quadrat_room', quadratRoomId);
+    localStorage.setItem('quadrat_room', quadratRoomId);
     const unsub = onSnapshot(doc(db, 'quadrat', quadratRoomId), snap => {
       if (snap.exists()) {
         const data = snap.data() as QuadratRoom;
@@ -151,7 +151,7 @@ export default function App() {
 
   useEffect(() => {
     if (!circleRoomId) return;
-    sessionStorage.setItem('circle_room', circleRoomId);
+    localStorage.setItem('circle_room', circleRoomId);
     const unsub = onSnapshot(doc(db, 'circle', circleRoomId), snap => {
       if (snap.exists()) {
         const data = snap.data() as CircleRoom;
@@ -165,9 +165,9 @@ export default function App() {
   }, [circleRoomId]);
 
   function clearAllRooms() {
-    sessionStorage.removeItem('busfahren_room');
-    sessionStorage.removeItem('quadrat_room');
-    sessionStorage.removeItem('circle_room');
+    localStorage.removeItem('busfahren_room');
+    localStorage.removeItem('quadrat_room');
+    localStorage.removeItem('circle_room');
     setRoomId(null); setRoom(null);
     setQuadratRoomId(null); setQuadratRoom(null);
     setCircleRoomId(null); setCircleRoom(null);
@@ -222,6 +222,7 @@ export default function App() {
   }
 
   const inRoom = roomId || quadratRoomId || circleRoomId;
+  const isLoadingRoom = (!!roomId && !room) || (!!quadratRoomId && !quadratRoom) || (!!circleRoomId && !circleRoom);
   const showLobby        = room        && room.status === 'lobby';
   const showGame         = room        && room.status !== 'lobby';
   const showQuadratLobby = quadratRoom && quadratRoom.status === 'lobby';
@@ -487,6 +488,18 @@ export default function App() {
               Los geht's
             </button>
           </div>
+        </div>
+      )}
+
+      {isLoadingRoom && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'var(--bg)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', gap: 16, zIndex: 50,
+        }}>
+          <div className="loading-spinner" />
+          <p style={{ fontWeight: 600, fontSize: 16, margin: 0 }}>Raum wird geladen…</p>
+          <button className="secondary" style={{ maxWidth: 220 }} onClick={handleLeave}>Abbrechen</button>
         </div>
       )}
 
