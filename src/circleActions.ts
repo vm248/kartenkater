@@ -21,9 +21,12 @@ function genCode(): string {
 async function cleanupOldCircleRooms(): Promise<void> {
   try {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    const q = query(collection(db, 'circle'), where('createdAt', '<', cutoff));
-    const snap = await getDocs(q);
-    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+    const [oldSnap, emptySnap] = await Promise.all([
+      getDocs(query(collection(db, 'circle'), where('createdAt', '<', cutoff))),
+      getDocs(query(collection(db, 'circle'), where('playerOrder', '==', []))),
+    ]);
+    const refs = new Map([...oldSnap.docs, ...emptySnap.docs].map(d => [d.id, d.ref]));
+    await Promise.all([...refs.values()].map(ref => deleteDoc(ref)));
   } catch {
     // ignore
   }
