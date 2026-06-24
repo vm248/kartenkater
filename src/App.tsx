@@ -4,9 +4,9 @@ import { db } from './firebase';
 import type { GameRoom } from './types';
 import type { QuadratRoom } from './quadratTypes';
 import type { CircleRoom } from './circleTypes';
-import { getPlayerId, leaveRoom } from './gameActions';
-import { leaveQuadratRoom } from './quadratActions';
-import { leaveCircleRoom } from './circleActions';
+import { getPlayerId, leaveRoom, joinRoom } from './gameActions';
+import { leaveQuadratRoom, joinQuadratRoom } from './quadratActions';
+import { leaveCircleRoom, joinCircleRoom } from './circleActions';
 import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send } from 'lucide-react';
 import { submitErrorReport } from './errorActions';
 import DevDashboard from './pages/DevDashboard';
@@ -77,6 +77,11 @@ export default function App() {
   const [errorSubmitted, setErrorSubmitted] = useState(false);
   const [errorSendFailed, setErrorSendFailed] = useState(false);
 
+  const [joinPrompt, setJoinPrompt] = useState<{ code: string; game: 'busfahren' | 'quadrat' | 'circle' } | null>(null);
+  const [joinPromptName, setJoinPromptName] = useState('');
+  const [joinPromptLoading, setJoinPromptLoading] = useState(false);
+  const [joinPromptError, setJoinPromptError] = useState('');
+
   function dismissWelcome() {
     localStorage.setItem('busfahren_welcomed', '1');
     setShowWelcome(false);
@@ -84,14 +89,14 @@ export default function App() {
 
   const playerId = getPlayerId();
 
-  // URL params → auto-fill join form
+  // URL params → auto-join popup
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const join = params.get('join');
     const game = params.get('game');
     if (join && (game === 'busfahren' || game === 'quadrat' || game === 'circle')) {
-      setInitialCode(join.toUpperCase());
-      setSelectedGame(game);
+      setJoinPrompt({ code: join.toUpperCase(), game });
+      setJoinPromptName(localStorage.getItem('busfahren_name') ?? '');
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -271,6 +276,32 @@ if (!errorText.trim() || errorSubmitting) return;
       setErrorSendFailed(true);
     } finally {
       setErrorSubmitting(false);
+    }
+  }
+
+  async function handleQuickJoin() {
+    if (!joinPrompt || !joinPromptName.trim() || joinPromptLoading) return;
+    setJoinPromptLoading(true);
+    setJoinPromptError('');
+    const name = joinPromptName.trim();
+    localStorage.setItem('busfahren_name', name);
+    try {
+      let result: { ok: boolean; error?: string };
+      if (joinPrompt.game === 'busfahren') {
+        result = await joinRoom(joinPrompt.code, playerId, name);
+        if (result.ok) { setJoinPrompt(null); handleJoined(joinPrompt.code); return; }
+      } else if (joinPrompt.game === 'quadrat') {
+        result = await joinQuadratRoom(joinPrompt.code, playerId, name);
+        if (result.ok) { setJoinPrompt(null); handleQuadratJoined(joinPrompt.code); return; }
+      } else {
+        result = await joinCircleRoom(joinPrompt.code, playerId, name);
+        if (result.ok) { setJoinPrompt(null); handleCircleJoined(joinPrompt.code); return; }
+      }
+      setJoinPromptError(result.error ?? 'Beitreten fehlgeschlagen.');
+    } catch {
+      setJoinPromptError('Verbindungsfehler. Bitte erneut versuchen.');
+    } finally {
+      setJoinPromptLoading(false);
     }
   }
 
@@ -683,6 +714,52 @@ if (!errorText.trim() || errorSubmitting) return;
           {showCircleLobby  && <CircleLobby  room={circleRoom}  playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
           {showCircleGame   && <CircleGame   room={circleRoom}  playerId={effectivePlayerId} isLocalMode={isLocalMode} />}
         </>
+      )}
+
+      {/* Quick-join popup (from share link / QR code) */}
+      {joinPrompt && !inRoom && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 400, padding: '1rem',
+          }}
+          onClick={() => !joinPromptLoading && setJoinPrompt(null)}
+        >
+          <div
+            style={{
+              background: 'var(--card)', borderRadius: 24, padding: '24px 20px 20px',
+              maxWidth: 340, width: '100%', boxShadow: 'var(--shadow)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Raum beitreten</span>
+              <button className="icon-btn icon-btn-ghost" onClick={() => setJoinPrompt(null)} disabled={joinPromptLoading}>
+                <X size={20} strokeWidth={2} />
+              </button>
+            </div>
+            <div className="room-code" style={{ marginBottom: 20, fontSize: 22 }}>{joinPrompt.code}</div>
+            <label style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+              Dein Name
+            </label>
+            <input
+              value={joinPromptName}
+              onChange={e => setJoinPromptName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleQuickJoin()}
+              placeholder="Name eingeben…"
+              disabled={joinPromptLoading}
+              autoFocus
+              style={{ marginBottom: joinPromptError ? 8 : 16 }}
+            />
+            {joinPromptError && (
+              <p style={{ color: '#e53e3e', fontSize: 13, margin: '0 0 12px', fontWeight: 600 }}>{joinPromptError}</p>
+            )}
+            <button onClick={handleQuickJoin} disabled={!joinPromptName.trim() || joinPromptLoading}>
+              {joinPromptLoading ? 'Verbinde…' : 'Beitreten'}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Bottom bar */}
