@@ -75,6 +75,7 @@ export default function App() {
   const [errorText, setErrorText] = useState('');
   const [errorSubmitting, setErrorSubmitting] = useState(false);
   const [errorSubmitted, setErrorSubmitted] = useState(false);
+  const [errorSendFailed, setErrorSendFailed] = useState(false);
 
   function dismissWelcome() {
     localStorage.setItem('busfahren_welcomed', '1');
@@ -253,17 +254,21 @@ export default function App() {
   function openErrorReport() {
     setShowErrorReport(true);
     setErrorSubmitted(false);
+    setErrorSendFailed(false);
     setErrorText('');
   }
 
   async function handleSubmitError() {
-    if (!errorText.trim() || errorSubmitting) return;
+if (!errorText.trim() || errorSubmitting) return;
     setErrorSubmitting(true);
+    setErrorSendFailed(false);
     try {
       const gameType = roomId ? 'busfahren' : quadratRoomId ? 'quadrat' : circleRoomId ? 'circle' : undefined;
       const currentRoomId = roomId ?? quadratRoomId ?? circleRoomId ?? undefined;
       await submitErrorReport({ message: errorText.trim(), playerId, gameType, roomId: currentRoomId });
       setErrorSubmitted(true);
+    } catch {
+      setErrorSendFailed(true);
     } finally {
       setErrorSubmitting(false);
     }
@@ -765,6 +770,11 @@ export default function App() {
                     outline: 'none',
                   }}
                 />
+                {errorSendFailed && (
+                  <p style={{ margin: '0 0 10px', fontSize: 13, color: '#e53e3e', fontWeight: 600, textAlign: 'center' }}>
+                    Senden fehlgeschlagen. Bitte prüfe deine Verbindung.
+                  </p>
+                )}
                 <button
                   onClick={handleSubmitError}
                   disabled={!errorText.trim() || errorSubmitting}

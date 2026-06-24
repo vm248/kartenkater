@@ -7,9 +7,13 @@ export async function submitErrorReport(params: {
   gameType?: string;
   roomId?: string;
 }): Promise<void> {
-  await addDoc(collection(db, 'errors'), {
-    ...params,
+  const data: Record<string, unknown> = {
+    message: params.message,
+    playerId: params.playerId,
     timestamp: Date.now(),
     userAgent: navigator.userAgent,
-  });
+  };
+  if (params.gameType !== undefined) data.gameType = params.gameType;
+  if (params.roomId !== undefined) data.roomId = params.roomId;
+  await addDoc(collection(db, 'errors'), data);
 }
