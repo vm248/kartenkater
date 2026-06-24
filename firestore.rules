@@ -33,7 +33,7 @@ service cloud.firestore {
       allow create: if request.resource.data.message is string
                     && request.resource.data.message.size() > 0
                     && request.resource.data.message.size() <= 2000
-                    && request.resource.data.timestamp is int;
+                    && request.resource.data.timestamp is number;
       allow read, delete: if request.auth != null;
     }
 
