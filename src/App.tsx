@@ -7,7 +7,7 @@ import type { CircleRoom } from './circleTypes';
 import { getPlayerId, leaveRoom, joinRoom } from './gameActions';
 import { leaveQuadratRoom, joinQuadratRoom } from './quadratActions';
 import { leaveCircleRoom, joinCircleRoom } from './circleActions';
-import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send, Zap, ZapOff } from 'lucide-react';
+import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send, Bell, BellOff } from 'lucide-react';
 import { submitErrorReport } from './errorActions';
 import ErrorBoundary from './components/ErrorBoundary';
 import DevDashboard from './pages/DevDashboard';
@@ -448,7 +448,7 @@ if (!errorText.trim() || errorSubmitting) return;
         {/* Right: haptic + dark mode */}
         <div style={{ display: 'flex', gap: 0 }}>
           <button className="icon-btn icon-btn-ghost" onClick={() => setHapticOn(h => !h)} title="Vibration">
-            {hapticOn ? <Zap size={18} strokeWidth={2} /> : <ZapOff size={18} strokeWidth={2} />}
+            {hapticOn ? <Bell size={18} strokeWidth={2} /> : <BellOff size={18} strokeWidth={2} />}
           </button>
           <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
             {dark ? <Sun size={20} strokeWidth={2} /> : <Moon size={20} strokeWidth={2} />}
