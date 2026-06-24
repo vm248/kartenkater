@@ -187,7 +187,7 @@ export default function Lobby({ room, playerId }: Props) {
                 </button>
                 {room.playerOrder.length < 2 && (
                   <p style={{ textAlign: 'center', fontSize: 13, opacity: 0.6 }}>
-                    Mindestens 2 Spieler nötig
+                    2+ Spieler nötig (max. 15)
                   </p>
                 )}
               </>

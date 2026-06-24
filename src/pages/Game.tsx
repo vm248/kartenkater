@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { Bus, ChevronUp, ChevronDown, RotateCcw, Play, Check, X, Shuffle, Layers, Clock } from 'lucide-react';
 import type { GameRoom } from '../types';
+import { haptic } from '../haptic';
 import CardComponent from '../components/CardComponent';
 import PyramidGrid from '../components/PyramidGrid';
 import Confetti from '../components/Confetti';
@@ -41,6 +43,14 @@ const STEP_OPTIONS = [
 export default function Game({ room, playerId, onLocalTurnDone }: Props) {
   const isHost = room.hostId === playerId;
   const { status } = room;
+
+  const prevLastActionRef = useRef(room.lastAction);
+  useEffect(() => {
+    if (room.lastAction && room.lastAction !== prevLastActionRef.current) {
+      haptic(room.lastAction.correct ? 'success' : 'error');
+      prevLastActionRef.current = room.lastAction;
+    }
+  }, [room.lastAction]);
 
   // --- Phase 1: Kartenraten ---
   if (status === 'phase1') {

@@ -4,6 +4,7 @@ import type { CircleRoom } from '../circleTypes';
 import {
   drawCard, confirmAction, useDaumen, restartCircleGame,
 } from '../circleActions';
+import { haptic } from '../haptic';
 import { cardAngle, polar } from '../circleLogic';
 import { playerColor } from '../playerColors';
 
@@ -68,6 +69,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
 
   async function handleDraw() {
     if (selectedIdx === null) return;
+    haptic('light');
     await drawCard(room, selectedIdx, playerId);
   }
 
@@ -190,7 +192,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
         </div>
 
         {isActor && (
-          <button style={{ maxWidth: 280 }} onClick={() => confirmAction(room)}>
+          <button style={{ maxWidth: 280 }} onClick={() => { haptic(pa.createdGap ? 'error' : 'success'); confirmAction(room); }}>
             {pa.type === 'number' && pa.distribute ? 'Alles verteilt – weiter' : 'Verstanden – weiter'}
           </button>
         )}
