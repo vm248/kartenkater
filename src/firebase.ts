@@ -1,16 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
-// TODO: Ersetze diese Werte mit deiner Firebase-Konfiguration
-// Firebase Console → Projekteinstellungen → Web-App → Konfiguration
 const firebaseConfig = {
-  apiKey: "AIzaSyCZfow2SmzQEy1B5LvltkmtEMotc4dhFVI",
-  authDomain: "testprojekt-b99b0.firebaseapp.com",
-  projectId: "testprojekt-b99b0",
-  storageBucket: "testprojekt-b99b0.firebasestorage.app",
-  messagingSenderId: "170923489079",
-  appId: "1:170923489079:web:bceab6ad1c72eb362fccb2",
+  apiKey: "AIzaSyCc5KFU20MgewXKbKFPwO7nyk1Rxmh146Y",
+  authDomain: "kartenkater.firebaseapp.com",
+  projectId: "kartenkater",
+  storageBucket: "kartenkater.firebasestorage.app",
+  messagingSenderId: "360765069928",
+  appId: "1:360765069928:web:2051ced4aeb02adea1f9dd",
 };
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);

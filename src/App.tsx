@@ -7,7 +7,9 @@ import type { CircleRoom } from './circleTypes';
 import { getPlayerId, leaveRoom } from './gameActions';
 import { leaveQuadratRoom } from './quadratActions';
 import { leaveCircleRoom } from './circleActions';
-import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X } from 'lucide-react';
+import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send } from 'lucide-react';
+import { submitErrorReport } from './errorActions';
+import DevDashboard from './pages/DevDashboard';
 import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
@@ -28,22 +30,24 @@ const THEMES = [
 ] as const;
 type ThemeId = 'mono' | 'lila' | 'ocean' | 'forest' | 'fire';
 
+const isDev = new URLSearchParams(window.location.search).has('dashboard');
+
 export default function App() {
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [initialCode, setInitialCode] = useState<string | null>(null);
 
   const [roomId, setRoomId] = useState<string | null>(
-    () => sessionStorage.getItem('busfahren_room')
+    () => localStorage.getItem('busfahren_room')
   );
   const [room, setRoom] = useState<GameRoom | null>(null);
 
   const [quadratRoomId, setQuadratRoomId] = useState<string | null>(
-    () => sessionStorage.getItem('quadrat_room')
+    () => localStorage.getItem('quadrat_room')
   );
   const [quadratRoom, setQuadratRoom] = useState<QuadratRoom | null>(null);
 
   const [circleRoomId, setCircleRoomId] = useState<string | null>(
-    () => sessionStorage.getItem('circle_room')
+    () => localStorage.getItem('circle_room')
   );
   const [circleRoom, setCircleRoom] = useState<CircleRoom | null>(null);
 
@@ -66,6 +70,11 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(
     () => !localStorage.getItem('busfahren_welcomed')
   );
+  const [infoTab, setInfoTab] = useState<'install' | 'multiplayer'>('install');
+  const [showErrorReport, setShowErrorReport] = useState(false);
+  const [errorText, setErrorText] = useState('');
+  const [errorSubmitting, setErrorSubmitting] = useState(false);
+  const [errorSubmitted, setErrorSubmitted] = useState(false);
 
   function dismissWelcome() {
     localStorage.setItem('busfahren_welcomed', '1');
@@ -121,7 +130,7 @@ export default function App() {
 
   useEffect(() => {
     if (!roomId) return;
-    sessionStorage.setItem('busfahren_room', roomId);
+    localStorage.setItem('busfahren_room', roomId);
     const unsub = onSnapshot(doc(db, 'rooms', roomId), snap => {
       if (snap.exists()) {
         const data = snap.data() as GameRoom;
@@ -136,7 +145,7 @@ export default function App() {
 
   useEffect(() => {
     if (!quadratRoomId) return;
-    sessionStorage.setItem('quadrat_room', quadratRoomId);
+    localStorage.setItem('quadrat_room', quadratRoomId);
     const unsub = onSnapshot(doc(db, 'quadrat', quadratRoomId), snap => {
       if (snap.exists()) {
         const data = snap.data() as QuadratRoom;
@@ -151,7 +160,7 @@ export default function App() {
 
   useEffect(() => {
     if (!circleRoomId) return;
-    sessionStorage.setItem('circle_room', circleRoomId);
+    localStorage.setItem('circle_room', circleRoomId);
     const unsub = onSnapshot(doc(db, 'circle', circleRoomId), snap => {
       if (snap.exists()) {
         const data = snap.data() as CircleRoom;
@@ -165,9 +174,9 @@ export default function App() {
   }, [circleRoomId]);
 
   function clearAllRooms() {
-    sessionStorage.removeItem('busfahren_room');
-    sessionStorage.removeItem('quadrat_room');
-    sessionStorage.removeItem('circle_room');
+    localStorage.removeItem('busfahren_room');
+    localStorage.removeItem('quadrat_room');
+    localStorage.removeItem('circle_room');
     setRoomId(null); setRoom(null);
     setQuadratRoomId(null); setQuadratRoom(null);
     setCircleRoomId(null); setCircleRoom(null);
@@ -222,6 +231,7 @@ export default function App() {
   }
 
   const inRoom = roomId || quadratRoomId || circleRoomId;
+  const isLoadingRoom = (!!roomId && !room) || (!!quadratRoomId && !quadratRoom) || (!!circleRoomId && !circleRoom);
   const showLobby        = room        && room.status === 'lobby';
   const showGame         = room        && room.status !== 'lobby';
   const showQuadratLobby = quadratRoom && quadratRoom.status === 'lobby';
@@ -239,6 +249,25 @@ export default function App() {
     (activeQuadrat && activeQuadrat.playerOrder.length < 2) ||
     (activeCircle  && activeCircle.playerOrder.length  < 2);
   const popupCode = activeRoom?.id ?? activeQuadrat?.id ?? activeCircle?.id ?? '';
+
+  function openErrorReport() {
+    setShowErrorReport(true);
+    setErrorSubmitted(false);
+    setErrorText('');
+  }
+
+  async function handleSubmitError() {
+    if (!errorText.trim() || errorSubmitting) return;
+    setErrorSubmitting(true);
+    try {
+      const gameType = roomId ? 'busfahren' : quadratRoomId ? 'quadrat' : circleRoomId ? 'circle' : undefined;
+      const currentRoomId = roomId ?? quadratRoomId ?? circleRoomId ?? undefined;
+      await submitErrorReport({ message: errorText.trim(), playerId, gameType, roomId: currentRoomId });
+      setErrorSubmitted(true);
+    } finally {
+      setErrorSubmitting(false);
+    }
+  }
 
   function handlePopupCopy() {
     navigator.clipboard.writeText(popupCode).then(() => {
@@ -490,6 +519,18 @@ export default function App() {
         </div>
       )}
 
+      {isLoadingRoom && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'var(--bg)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', gap: 16, zIndex: 50,
+        }}>
+          <div className="loading-spinner" />
+          <p style={{ fontWeight: 600, fontSize: 16, margin: 0 }}>Raum wird geladen…</p>
+          <button className="secondary" style={{ maxWidth: 220 }} onClick={handleLeave}>Abbrechen</button>
+        </div>
+      )}
+
       {showInfo && (
         <div
           style={{
@@ -506,36 +547,93 @@ export default function App() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Als App installieren</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Hilfe</span>
               <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(false)}>
                 <X size={20} strokeWidth={2} />
               </button>
             </div>
 
-            <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>Android</p>
-              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
-                <li>Seite in <strong style={{ color: 'var(--text)' }}>Chrome</strong> öffnen</li>
-                <li>Drei-Punkte-Menü <strong style={{ color: 'var(--text)' }}>⋮</strong> antippen</li>
-                <li><strong style={{ color: 'var(--text)' }}>"App installieren"</strong> wählen</li>
-                <li>Bestätigen – fertig</li>
-              </ol>
+            {/* Tab switcher */}
+            <div style={{
+              display: 'flex', gap: 4, marginBottom: 16,
+              background: 'var(--card-inner)', borderRadius: 13, padding: 4,
+            }}>
+              {(['install', 'multiplayer'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setInfoTab(tab)}
+                  style={{
+                    flex: 1, border: 'none', borderRadius: 10, padding: '7px 0',
+                    background: infoTab === tab ? 'var(--card)' : 'transparent',
+                    boxShadow: infoTab === tab ? 'var(--shadow-sm)' : 'none',
+                    color: infoTab === tab ? 'var(--primary)' : 'var(--text-muted)',
+                    fontWeight: 700, fontSize: 13, cursor: 'pointer', margin: 0,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {tab === 'install' ? 'App installieren' : 'Multiplayer'}
+                </button>
+              ))}
             </div>
 
-            <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px' }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>iPhone / iPad</p>
-              <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
-                <li>Seite in <strong style={{ color: 'var(--text)' }}>Safari</strong> öffnen <span style={{ fontSize: 12 }}>(nicht Chrome!)</span></li>
-                <li>Teilen-Symbol <strong style={{ color: 'var(--text)' }}>↑</strong> unten antippen</li>
-                <li><strong style={{ color: 'var(--text)' }}>"Zum Home-Bildschirm"</strong> wählen</li>
-                <li>Namen bestätigen – fertig</li>
-              </ol>
-            </div>
-
-            <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
-              Die App läuft dann ohne Browser-Leiste – wie eine native App.
-            </p>
+            {infoTab === 'install' ? (
+              <>
+                <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
+                  <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>Android</p>
+                  <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                    <li>Seite in <strong style={{ color: 'var(--text)' }}>Chrome</strong> öffnen</li>
+                    <li>Drei-Punkte-Menü <strong style={{ color: 'var(--text)' }}>⋮</strong> antippen</li>
+                    <li><strong style={{ color: 'var(--text)' }}>"App installieren"</strong> wählen</li>
+                    <li>Bestätigen – fertig</li>
+                  </ol>
+                </div>
+                <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px' }}>
+                  <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>iPhone / iPad</p>
+                  <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                    <li>Seite in <strong style={{ color: 'var(--text)' }}>Safari</strong> öffnen <span style={{ fontSize: 12 }}>(nicht Chrome!)</span></li>
+                    <li>Teilen-Symbol <strong style={{ color: 'var(--text)' }}>↑</strong> unten antippen</li>
+                    <li><strong style={{ color: 'var(--text)' }}>"Zum Home-Bildschirm"</strong> wählen</li>
+                    <li>Namen bestätigen – fertig</li>
+                  </ol>
+                </div>
+                <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
+                  Die App läuft dann ohne Browser-Leiste – wie eine native App.
+                </p>
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {([
+                  { n: 1, title: 'Spiel wählen', text: 'Tippe auf Busfahren, Das Fenster oder Circle.' },
+                  { n: 2, title: 'Raum erstellen', text: 'Tippe auf "Neues Spiel" – du bekommst einen 4-stelligen Raumcode.' },
+                  { n: 3, title: 'Code teilen', text: 'Schick den Code an deine Mitspieler – per Chat oder laut vorlesen.' },
+                  { n: 4, title: 'Beitreten', text: 'Mitspieler tippen "Beitreten", geben den Code ein und sind dabei.' },
+                  { n: 5, title: 'Spiel starten', text: 'Der Host (Ersteller) startet das Spiel sobald alle da sind.' },
+                ] as { n: number; title: string; text: string }[]).map(({ n, title, text }) => (
+                  <div key={n} style={{
+                    display: 'flex', gap: 12, alignItems: 'flex-start',
+                    background: 'var(--card-inner)', borderRadius: 12, padding: '11px 13px',
+                    border: '1.5px solid var(--border)',
+                  }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: '50%',
+                      background: 'var(--primary)', color: 'var(--btn-color)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 800, flexShrink: 0, marginTop: 1,
+                    }}>
+                      {n}
+                    </div>
+                    <div>
+                      <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13 }}>{title}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{text}</p>
+                    </div>
+                  </div>
+                ))}
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                  Kein Account nötig – einfach losspielen.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -561,22 +659,127 @@ export default function App() {
         </div>
       )}
 
-      {!inRoom && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
-      {!inRoom && selectedGame === 'busfahren' && (
-        <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+      {isDev ? <DevDashboard /> : (
+        <>
+          {!inRoom && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
+          {!inRoom && selectedGame === 'busfahren' && (
+            <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+          )}
+          {!inRoom && selectedGame === 'quadrat' && (
+            <QuadratHome onJoined={(id, ids) => handleQuadratJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+          )}
+          {!inRoom && selectedGame === 'circle' && (
+            <CircleHome onJoined={(id, ids) => handleCircleJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+          )}
+          {showLobby        && <Lobby        room={room}        playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
+          {showGame         && <Game         room={room}        playerId={effectivePlayerId} onLocalTurnDone={isLocalMode ? () => setPhase1HandoffReady(true) : undefined} />}
+          {showQuadratLobby && <QuadratLobby room={quadratRoom} playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
+          {showQuadratGame  && <QuadratGame  room={quadratRoom} playerId={effectivePlayerId} />}
+          {showCircleLobby  && <CircleLobby  room={circleRoom}  playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
+          {showCircleGame   && <CircleGame   room={circleRoom}  playerId={effectivePlayerId} isLocalMode={isLocalMode} />}
+        </>
       )}
-      {!inRoom && selectedGame === 'quadrat' && (
-        <QuadratHome onJoined={(id, ids) => handleQuadratJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+
+      {/* Bottom bar */}
+      {!isDev && <div style={{
+        position: 'fixed', bottom: 10, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 100, width: 'calc(100% - 24px)', maxWidth: 480,
+        background: 'var(--card)', border: '1.5px solid var(--border)',
+        borderRadius: 20, boxShadow: 'var(--shadow-sm)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: 52,
+      }}>
+        <button
+          onClick={openErrorReport}
+          className="icon-btn-ghost"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 13, fontWeight: 600,
+            padding: '0 20px', height: '100%', borderRadius: 20,
+          }}
+        >
+          <AlertTriangle size={15} strokeWidth={2} />
+          Fehler melden
+        </button>
+      </div>}
+
+      {/* Error report modal */}
+      {showErrorReport && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 300, padding: '1rem',
+          }}
+          onClick={() => { if (!errorSubmitting) setShowErrorReport(false); }}
+        >
+          <div
+            style={{
+              background: 'var(--card)', borderRadius: 24, padding: '22px 20px 20px',
+              maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Fehler melden</span>
+              <button className="icon-btn icon-btn-ghost" onClick={() => setShowErrorReport(false)} disabled={errorSubmitting}>
+                <X size={20} strokeWidth={2} />
+              </button>
+            </div>
+
+            {errorSubmitted ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: '50%',
+                  background: 'var(--card-inner)', border: '2px solid var(--primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 14px',
+                }}>
+                  <Check size={22} strokeWidth={2.5} style={{ color: 'var(--primary)' }} />
+                </div>
+                <p style={{ fontWeight: 700, fontSize: 16, margin: '0 0 6px' }}>Danke für dein Feedback!</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 0 20px' }}>Wir schauen uns das an.</p>
+                <button onClick={() => setShowErrorReport(false)}>Schließen</button>
+              </div>
+            ) : (
+              <>
+                <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  Beschreibe kurz was passiert ist – kein Account nötig.
+                </p>
+                {(roomId || quadratRoomId || circleRoomId) && (
+                  <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>
+                    Kontext: {roomId ? 'Busfahren' : quadratRoomId ? 'Das Fenster' : 'Circle'} · Raum {roomId ?? quadratRoomId ?? circleRoomId}
+                  </p>
+                )}
+                <textarea
+                  value={errorText}
+                  onChange={e => setErrorText(e.target.value)}
+                  placeholder='z.B. "Spiel hat sich aufgehängt nach dem Starten …"'
+                  rows={4}
+                  style={{
+                    width: '100%', resize: 'none', borderRadius: 14, padding: '12px 14px',
+                    background: 'var(--card-inner)', border: '1.5px solid var(--border)',
+                    color: 'var(--text)', fontSize: 13, lineHeight: 1.6,
+                    fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 12,
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={handleSubmitError}
+                  disabled={!errorText.trim() || errorSubmitting}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%' }}
+                >
+                  {errorSubmitting
+                    ? 'Wird gesendet…'
+                    : <><Send size={15} strokeWidth={2.5} /> Absenden</>
+                  }
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       )}
-      {!inRoom && selectedGame === 'circle' && (
-        <CircleHome onJoined={(id, ids) => handleCircleJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
-      )}
-      {showLobby        && <Lobby        room={room}        playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
-      {showGame         && <Game         room={room}        playerId={effectivePlayerId} onLocalTurnDone={isLocalMode ? () => setPhase1HandoffReady(true) : undefined} />}
-      {showQuadratLobby && <QuadratLobby room={quadratRoom} playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
-      {showQuadratGame  && <QuadratGame  room={quadratRoom} playerId={effectivePlayerId} />}
-      {showCircleLobby  && <CircleLobby  room={circleRoom}  playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
-      {showCircleGame   && <CircleGame   room={circleRoom}  playerId={effectivePlayerId} isLocalMode={isLocalMode} />}
     </>
   );
 }
