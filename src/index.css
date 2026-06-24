@@ -128,7 +128,7 @@ body {
   width: 100%;
   display: flex;
   justify-content: center;
-  padding: 70px 0 4rem;
+  padding: 70px 0 80px;
 }
 
 button.back-btn {
@@ -570,7 +570,7 @@ button.danger:hover:not(:disabled) { opacity: 0.85; }
 
 /* ── Mobile ─────────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .game-area { padding: 76px 1rem 2rem; margin: 0; border-radius: 0; min-height: 100dvh; }
+  .game-area { padding: 76px 1rem 80px; margin: 0; border-radius: 0; min-height: 100dvh; }
   #root { padding: 0; }
   button { padding: 17px; min-height: 54px; }
   .choices button { min-height: 52px; font-size: 15px; }

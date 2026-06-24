@@ -44,7 +44,9 @@ Firestore (rooms/{code} | quadrat/{code} | circle/{code})
 | `src/circleTypes.ts` | TypeScript-Interfaces für Circle (`CircleRoom`, `PendingCircleAction`, …) |
 | `src/circleLogic.ts` | Spiellogik für Circle (Deck, Kartenwinkel, Lückencheck, Effekte) |
 | `src/circleActions.ts` | Firestore-Schreiboperationen für Circle |
-| `src/App.tsx` | Firestore-Subscriptions, Dark Mode, Farbthema, Routing, Push-Notifications, Lokal-Modus-Handoff, Info-Modal, Welcome-Popup |
+| `src/App.tsx` | Firestore-Subscriptions, Dark Mode, Farbthema, Routing, Push-Notifications, Lokal-Modus-Handoff, Info-Modal, Welcome-Popup, Bottom-Bar (Fehler melden), `?dashboard`-Routing |
+| `src/errorActions.ts` | `submitErrorReport()` → schreibt in Firestore `errors`-Collection |
+| `src/pages/DevDashboard.tsx` | Developer-Dashboard: GitHub-Login, Stats, Räume-Liste, Fehlerberichte, Cleanup |
 | `src/pages/Game.tsx` | Busfahren (phase1 → phase2start → phase2 → results → phase3 → finished) |
 | `src/pages/CircleGame.tsx` | Circle-Spiel: SVG-Kreis, DaumenBar, RuleBar, Overlay (inkl. eigene Kartenregeln) |
 | `src/pages/CircleLobby.tsx` | Circle-Lobby: Kurzregeln, CardRulesSection (pro Kartenwert) |
@@ -84,21 +86,42 @@ Alle Spiele unterstützen einen Lokal-Modus (Gerät wird herumgegeben). `App.tsx
 
 **Busfahren Phase 1 Lokal-Fix**: `makeGuess()` schreibt `currentPlayerIndex` und `lastAction` gleichzeitig in Firestore. Ohne Fix: Handoff-Screen überblendet sofort das Kartenergebnis. Fix: `phase1HandoffReady`-State in `App.tsx` blockiert den Handoff-Screen in Phase 1 bis der Spieler explizit "Gesehen – Gerät weitergeben" klickt. `Game.tsx` bekommt `onLocalTurnDone?: () => void` als Prop und zeigt diesen Button wenn `!isMyTurn && lastAction !== null`.
 
-### Top Bar (App.tsx)
+### Top Bar & Bottom Bar (App.tsx)
 
-- `position: fixed`, `top: 10`, zentriert mit `left: 50%; transform: translateX(-50%)`
-- Breite: `calc(100% - 24px)`, max `480px`, Höhe `52px`
+- **Top Bar**: `position: fixed`, `top: 10`, zentriert mit `left: 50%; transform: translateX(-50%)`, Breite `calc(100% - 24px)`, max `480px`, Höhe `52px`
 - Flex `space-between`: Links = Farbthema-Picker, Mitte = Info-Button **oder** Home-Button, Rechts = Dark/Light-Mode
-- **Mitte-Logik**: `!selectedGame && !inRoom` → Info-Button (öffnet PWA-Installationsanleitung); sonst Home-Button (wenn in Spiel/Raum)
+- **Mitte-Logik**: `!selectedGame && !inRoom` → Info-Button (öffnet Hilfe-Modal); sonst Home-Button
 - Icons `ghost`-Style: `.icon-btn.icon-btn-ghost` (transparent, kein Border, kein Shadow)
-- Icons: `size={20}`, Touch-Target auf Mobile: `.icon-btn { width: 44px; height: 44px }` via `@media (max-width: 480px)`
 - Farbthemen: mono, lila, ocean, forest, fire (gespeichert in `localStorage.busfahren_theme`)
-- `.game-area` hat auf Mobile `padding-top: 76px`, auf Desktop läuft über `#root { padding: 70px 0 4rem }`
+- **Bottom Bar**: `position: fixed`, `bottom: 10`, gleiche Breite/Style wie Top Bar — enthält "Fehler melden"-Button; im `?dashboard`-Modus ausgeblendet
+- `.game-area` hat auf Mobile `padding-top: 76px` und `padding-bottom: 80px` (für Bottom Bar)
 
-### Info-Modal & Welcome-Popup (App.tsx)
+### Info-Modal / Hilfe (App.tsx)
 
-- **Info-Modal**: Öffnet sich beim Klick auf den Info-Button in der Top-Bar. Zeigt Schritt-für-Schritt-Anleitung für PWA-Installation auf Android (Chrome) und iOS (Safari). Schließt per Backdrop-Klick oder X-Button.
-- **Welcome-Popup**: Erscheint genau einmal beim ersten Besuch. Gespeichert in `localStorage.busfahren_welcomed`. Zeigt App-Beschreibung + Hinweis auf den Info-Button mit inline-SVG-Logo (zwei Spielkarten). `localStorage.removeItem('busfahren_welcomed')` → Popup erscheint wieder (zum Testen).
+- Öffnet sich beim Klick auf den Info-Button. Zwei Tabs: **App installieren** (PWA-Anleitung Android/iOS) und **Multiplayer** (Schritt-für-Schritt Raumerstellen).
+- Schließt per Backdrop-Klick oder X-Button.
+- **Welcome-Popup**: Erscheint einmal beim ersten Besuch. `localStorage.busfahren_welcomed`. `localStorage.removeItem('busfahren_welcomed')` → wieder anzeigen.
+
+### Fehler melden (App.tsx + errorActions.ts)
+
+- Bottom Bar enthält "Fehler melden"-Button → öffnet Modal mit Textarea
+- `submitErrorReport()` in `src/errorActions.ts` schreibt in Firestore `errors/{id}`: `{ message, playerId, gameType?, roomId?, timestamp, userAgent }`
+- Firestore Rules: `errors` erlaubt create ohne Auth, read/delete nur mit Auth (`request.auth != null`)
+
+### Developer Dashboard (DevDashboard.tsx)
+
+- Erreichbar unter `/?dashboard` — normaler App-Inhalt wird durch Dashboard ersetzt
+- **Login**: GitHub OAuth via Firebase Auth (`signInWithPopup`). Nur `vooke.meyer@t-online.de` kommt durch, andere werden sofort ausgeloggt mit Redirect-Button zum Hauptmenü
+- **Inhalt**: Stats-Grid (Räume pro Spieltyp, Spieler gesamt), Fehlerberichte-Liste (löschen einzeln/alle), Räume-Liste aller 3 Collections (löschen einzeln), Cleanup-Button (löscht finished + ≤1 Spieler)
+- Firebase Auth muss in Firebase Console aktiviert sein (GitHub-Provider). Firestore Rules erlauben delete auf rooms/quadrat/circle wenn `request.auth != null`
+
+### Firebase
+
+`src/firebase.ts` enthält die Firestore-Konfiguration (Projekt: `kartenkater`). Collections: `rooms` (Busfahren), `quadrat` (Das Fenster), `circle` (Circle), `errors` (Fehlerberichte).
+
+`auth` wird aus `firebase/auth` exportiert — wird nur vom DevDashboard verwendet.
+
+Security Rules liegen in `firestore.rules`. **Muss manuell in der Firebase Console unter Firestore → Regeln eingespielt werden.**
 
 ### Push-Notifications
 
@@ -112,11 +135,6 @@ Client-seitig via Browser Notification API. Wird ausgelöst wenn Firestore-Updat
 
 `playerId` wird beim ersten Besuch per `crypto.randomUUID()` generiert und in `localStorage` (`busfahren_pid`) gespeichert. `sessionStorage` merkt sich die aktuelle `roomId`. Kein Auth-System.
 
-### Firebase
-
-`src/firebase.ts` enthält die Firestore-Konfiguration. Collections: `rooms` (Busfahren), `quadrat` (Das Fenster), `circle` (Circle).
-
-Security Rules liegen in `firestore.rules`. **Muss manuell in der Firebase Console unter Firestore → Regeln eingespielt werden** (nicht automatisch deployed). Alle drei Collections (`rooms`, `quadrat`, `circle`) sind abgedeckt mit Struktur-Validierung auf create/update.
 
 ### PWA / Icons
 
@@ -133,9 +151,12 @@ Kein CSS-Framework. Globale CSS Custom Properties in `src/index.css` für Light/
 - `button` global: `touch-action: manipulation; -webkit-tap-highlight-color: transparent` (kein iOS-Tap-Blink, kein 300ms-Delay)
 - `@keyframes cardFlyUp` für Circle-Karten-Animation
 
-## Offene Punkte / Ideen (Stand 2026-06-22)
+## Offene Punkte / Ideen (Stand 2026-06-24)
 
-- [x] **Circle: Eigene Kartenregeln im Spiel anzeigen** – erledigt: `cardRules` in Firestore, `CardRulesSection` in Lobby, Overlay in `CircleGame.tsx` zeigt "Eigene Regel!" wenn vorhanden
-- [ ] **Circle: Regelanzeige für Kategorie (König)**: Kategorie wird verbal genannt – könnte analog zur Damen-Regel gespeichert und angezeigt werden
-- [ ] **Firestore Security Rules deployen**: Rules in `firestore.rules` sind korrekt, müssen aber manuell in die Firebase Console eingespielt werden (Firebase Console → Firestore → Regeln → einfügen → Veröffentlichen)
+- [x] **Circle: Eigene Kartenregeln im Spiel anzeigen** – erledigt
+- [x] **Fehler melden** – erledigt: Bottom Bar + Modal + Firestore `errors`-Collection
+- [x] **Hilfe-Modal Multiplayer-Tab** – erledigt
+- [x] **Developer Dashboard** – erledigt: `/?dashboard`, GitHub Auth, Stats, Räume, Fehlerberichte, Cleanup
+- [ ] **Circle: Regelanzeige für Kategorie (König)**: analog zur Damen-Regel speichern und anzeigen
+- [ ] **Firestore Security Rules deployen**: nach jeder Änderung manuell in Firebase Console einspielen (Firestore → Regeln → Veröffentlichen)
 - [ ] **Offline-Modus** (explizit zurückgestellt): Service Worker cacht nur Assets, keine Offline-Spiellogik

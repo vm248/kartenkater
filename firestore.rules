@@ -6,7 +6,8 @@ service cloud.firestore {
       allow read: if true;
       allow create: if validNewRoom();
       allow update: if validRoomUpdate();
-      allow delete: if resource.data.playerOrder.size() <= 1
+      allow delete: if request.auth != null
+                    || resource.data.playerOrder.size() <= 1
                     || request.time.toMillis() > resource.data.createdAt + 86400000;
     }
 
@@ -14,7 +15,8 @@ service cloud.firestore {
       allow read: if true;
       allow create: if validNewQuadrat();
       allow update: if validQuadratUpdate();
-      allow delete: if resource.data.playerOrder.size() <= 1
+      allow delete: if request.auth != null
+                    || resource.data.playerOrder.size() <= 1
                     || request.time.toMillis() > resource.data.createdAt + 86400000;
     }
 
@@ -22,8 +24,17 @@ service cloud.firestore {
       allow read: if true;
       allow create: if validNewCircle();
       allow update: if validCircleUpdate();
-      allow delete: if resource.data.playerOrder.size() <= 1
+      allow delete: if request.auth != null
+                    || resource.data.playerOrder.size() <= 1
                     || request.time.toMillis() > resource.data.createdAt + 86400000;
+    }
+
+    match /errors/{errorId} {
+      allow create: if request.resource.data.message is string
+                    && request.resource.data.message.size() > 0
+                    && request.resource.data.message.size() <= 2000
+                    && request.resource.data.timestamp is int;
+      allow read, delete: if request.auth != null;
     }
 
     function validNewRoom() {
