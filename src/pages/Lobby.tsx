@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bus, Copy, Check, Link, LogOut, Play, AlertTriangle, X } from 'lucide-react';
+import { Bus, LogOut, Play, AlertTriangle, X } from 'lucide-react';
 import type { GameRoom, GameSettings } from '../types';
 import { updateSettings, startGame, kickPlayer } from '../gameActions';
 import { playerColor } from '../playerColors';
+import RoomShareButtons from '../components/RoomShareButtons';
 
 interface Props {
   room: GameRoom;
@@ -13,8 +14,6 @@ export default function Lobby({ room, playerId }: Props) {
   const isHost = room.hostId === playerId;
   const [settings, setSettings] = useState<GameSettings>(room.settings);
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [leaveMsg, setLeaveMsg] = useState('');
   const prevOrderRef = useRef<string[]>(room.playerOrder);
   const prevPlayersRef = useRef(room.players);
@@ -40,39 +39,13 @@ export default function Lobby({ room, playerId }: Props) {
     setSaving(false);
   }
 
-  function handleCopy() {
-    navigator.clipboard.writeText(room.id).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
-
-  async function handleShareLink() {
-    const url = `${window.location.origin}${window.location.pathname}?join=${room.id}&game=busfahren`;
-    if (navigator.share) {
-      try { await navigator.share({ title: 'Kartenkater – Busfahren', url }); } catch {}
-    } else {
-      navigator.clipboard.writeText(url).then(() => {
-        setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 2000);
-      });
-    }
-  }
-
   return (
     <div className="game-area">
       <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
 
       <h2>Raum-Code</h2>
       <div className="room-code">{room.id}</div>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: '1rem' }}>
-        <button className="copy-btn" onClick={handleCopy}>
-          {copied ? <><Check size={13} strokeWidth={2.5} /> Kopiert!</> : <><Copy size={13} /> Code kopieren</>}
-        </button>
-        <button className="copy-btn" onClick={handleShareLink}>
-          {linkCopied ? <><Check size={13} strokeWidth={2.5} /> Link kopiert!</> : <><Link size={13} /> Link teilen</>}
-        </button>
-      </div>
+      <RoomShareButtons roomId={room.id} game="busfahren" />
 
       {leaveMsg && (
         <div className="leave-toast" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
