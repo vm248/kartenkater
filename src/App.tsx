@@ -744,6 +744,7 @@ if (!errorText.trim() || errorSubmitting) return;
               Dein Name
             </label>
             <input
+              type="text"
               value={joinPromptName}
               onChange={e => setJoinPromptName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleQuickJoin()}
