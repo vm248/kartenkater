@@ -151,7 +151,7 @@ export default function CircleHome({ onJoined, onBack, initialCode }: Props) {
       {error && <div className="feedback wrong">{error}</div>}
 
       <button onClick={handleCreate} disabled={loading}>
-        <Plus size={17} strokeWidth={2.5} /> Neuen Raum erstellen
+        <Plus size={17} strokeWidth={2.5} /> {loading ? 'Erstelle Raum…' : 'Neuen Raum erstellen'}
       </button>
 
       <button className="secondary" onClick={() => { setError(''); setLocalSetup(true); }} disabled={loading}>
@@ -171,7 +171,7 @@ export default function CircleHome({ onJoined, onBack, initialCode }: Props) {
       />
 
       <button className="secondary" onClick={handleJoin} disabled={loading}>
-        <LogIn size={16} strokeWidth={2} /> Raum beitreten
+        <LogIn size={16} strokeWidth={2} /> {loading ? 'Verbinde…' : 'Raum beitreten'}
       </button>
     </div>
   );

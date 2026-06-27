@@ -56,6 +56,11 @@ export default function DevDashboard() {
   const [authError, setAuthError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
+  useEffect(() => {
+    document.title = 'Dashboard';
+    return () => { document.title = 'Kartenkater'; };
+  }, []);
+
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [errors, setErrors] = useState<ErrorRow[]>([]);
   const [dataLoading, setDataLoading] = useState(false);

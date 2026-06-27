@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { Bus, ChevronUp, ChevronDown, RotateCcw, Play, Check, X, Shuffle, Layers, Clock } from 'lucide-react';
 import type { GameRoom } from '../types';
+import { haptic } from '../haptic';
 import CardComponent from '../components/CardComponent';
 import PyramidGrid from '../components/PyramidGrid';
 import Confetti from '../components/Confetti';
@@ -41,6 +43,14 @@ const STEP_OPTIONS = [
 export default function Game({ room, playerId, onLocalTurnDone }: Props) {
   const isHost = room.hostId === playerId;
   const { status } = room;
+
+  const prevLastActionRef = useRef(room.lastAction);
+  useEffect(() => {
+    if (room.lastAction && room.lastAction !== prevLastActionRef.current) {
+      haptic(room.lastAction.correct ? 'success' : 'error');
+      prevLastActionRef.current = room.lastAction;
+    }
+  }, [room.lastAction]);
 
   // --- Phase 1: Kartenraten ---
   if (status === 'phase1') {
@@ -131,9 +141,20 @@ export default function Game({ room, playerId, onLocalTurnDone }: Props) {
 
   // --- Phase 2 Start: Pyramidenmodus wählen ---
   if (status === 'phase2start') {
+    const la = room.lastAction;
     return (
       <div className="game-area">
         <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
+
+        {la && (
+          <div key={JSON.stringify(la)} className={`feedback ${la.correct ? 'correct' : 'wrong'}`}>
+            {la.message}
+            <div style={{ marginTop: 6 }}>
+              <CardComponent card={la.card} />
+            </div>
+          </div>
+        )}
+
         <h2>Pyramide</h2>
         <p style={{ textAlign: 'center' }}>Wie soll die Pyramide aufgedeckt werden?</p>
         {isHost ? (

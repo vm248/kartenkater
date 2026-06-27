@@ -7,8 +7,9 @@ import type { CircleRoom } from './circleTypes';
 import { getPlayerId, leaveRoom, joinRoom } from './gameActions';
 import { leaveQuadratRoom, joinQuadratRoom } from './quadratActions';
 import { leaveCircleRoom, joinCircleRoom } from './circleActions';
-import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send } from 'lucide-react';
+import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send, Bell, BellOff } from 'lucide-react';
 import { submitErrorReport } from './errorActions';
+import ErrorBoundary from './components/ErrorBoundary';
 import DevDashboard from './pages/DevDashboard';
 import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
@@ -56,6 +57,9 @@ export default function App() {
 
   const [dark, setDark] = useState(
     () => localStorage.getItem('busfahren_dark') === '1'
+  );
+  const [hapticOn, setHapticOn] = useState(
+    () => localStorage.getItem('busfahren_haptic') !== '0'
   );
   const [theme, setTheme] = useState<ThemeId>(
     () => (localStorage.getItem('busfahren_theme') as ThemeId) ?? 'mono'
@@ -115,6 +119,11 @@ export default function App() {
     document.body.classList.toggle('dark', dark);
     localStorage.setItem('busfahren_dark', dark ? '1' : '0');
   }, [dark]);
+
+  // Haptic toggle
+  useEffect(() => {
+    localStorage.setItem('busfahren_haptic', hapticOn ? '1' : '0');
+  }, [hapticOn]);
 
   // Color theme
   useEffect(() => {
@@ -436,10 +445,15 @@ if (!errorText.trim() || errorSubmitting) return;
           </button>
         ) : null}
 
-        {/* Right: dark / light mode */}
-        <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
-          {dark ? <Sun size={20} strokeWidth={2} /> : <Moon size={20} strokeWidth={2} />}
-        </button>
+        {/* Right: haptic + dark mode */}
+        <div style={{ display: 'flex', gap: 0 }}>
+          <button className="icon-btn icon-btn-ghost" onClick={() => setHapticOn(h => !h)} title="Vibration">
+            {hapticOn ? <Bell size={18} strokeWidth={2} /> : <BellOff size={18} strokeWidth={2} />}
+          </button>
+          <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
+            {dark ? <Sun size={20} strokeWidth={2} /> : <Moon size={20} strokeWidth={2} />}
+          </button>
+        </div>
       </div>
 
       {/* Too few players popup */}
@@ -459,9 +473,11 @@ if (!errorText.trim() || errorSubmitting) return;
                   Teile den Code und warte, bis jemand beitritt.
                 </p>
                 <div className="room-code" style={{ margin: '0 0 10px' }}>{popupCode}</div>
-                <button className="copy-btn" onClick={handlePopupCopy} style={{ marginBottom: 16 }}>
-                  {popupCopied ? <><Check size={13} strokeWidth={2.5} /> Kopiert!</> : <><Copy size={13} /> Code kopieren</>}
-                </button>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                  <button className="copy-btn" onClick={handlePopupCopy}>
+                    {popupCopied ? <><Check size={13} strokeWidth={2.5} /> Kopiert!</> : <><Copy size={13} /> Code kopieren</>}
+                  </button>
+                </div>
               </>
             ) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 16px' }}>
@@ -696,6 +712,7 @@ if (!errorText.trim() || errorSubmitting) return;
       )}
 
       {isDev ? <DevDashboard /> : (
+        <ErrorBoundary>
         <>
           {!inRoom && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
           {!inRoom && selectedGame === 'busfahren' && (
@@ -714,6 +731,7 @@ if (!errorText.trim() || errorSubmitting) return;
           {showCircleLobby  && <CircleLobby  room={circleRoom}  playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
           {showCircleGame   && <CircleGame   room={circleRoom}  playerId={effectivePlayerId} isLocalMode={isLocalMode} />}
         </>
+        </ErrorBoundary>
       )}
 
       {/* Quick-join popup (from share link / QR code) */}
@@ -744,6 +762,7 @@ if (!errorText.trim() || errorSubmitting) return;
               Dein Name
             </label>
             <input
+              type="text"
               value={joinPromptName}
               onChange={e => setJoinPromptName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleQuickJoin()}

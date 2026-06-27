@@ -111,13 +111,15 @@ export function evaluateQuadratGuess(guess: string, cellIndex: number, grid: QCe
 
 export function connectedRevealedCells(startIndex: number, grid: QCell[]): number[] {
   const toRemove = new Set<number>([startIndex]);
-  const queue = (ADJACENT[startIndex] ?? []).filter(i => grid[i].revealed && grid[i].type !== null && grid[i].type !== 'C');
+  // Traverse through corners (always revealed) so all connected branches are found;
+  // corners are included in the result and get new cards but stay revealed.
+  const queue = (ADJACENT[startIndex] ?? []).filter(i => grid[i].revealed && grid[i].type !== null);
   for (let i = 0; i < queue.length; i++) {
     const pos = queue[i];
     if (toRemove.has(pos)) continue;
     toRemove.add(pos);
     for (const adj of ADJACENT[pos] ?? []) {
-      if (!toRemove.has(adj) && grid[adj].revealed && grid[adj].type !== null && grid[adj].type !== 'C') {
+      if (!toRemove.has(adj) && grid[adj].revealed && grid[adj].type !== null) {
         queue.push(adj);
       }
     }

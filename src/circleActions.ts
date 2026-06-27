@@ -89,6 +89,7 @@ export async function joinCircleRoom(
   const room = snap.data() as CircleRoom;
   if (room.players[playerId]) return { ok: true };
   if (room.status !== 'lobby') return { ok: false, error: 'Spiel läuft bereits.' };
+  if (room.playerOrder.length >= 15) return { ok: false, error: 'Raum ist voll (max. 15 Spieler).' };
 
   const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
   const insertAt = Math.floor(Math.random() * (room.playerOrder.length + 1));
@@ -198,13 +199,17 @@ export async function drawCard(
   if (effect === 'ace_normal' || effect === 'ace_ex') {
     update.acesDrawn = room.acesDrawn + 1;
   }
-  if (effect === 'queen') {
-    update.lastQueenId = playerId;
-    update.lastQueenName = playerName;
-  }
-  if (effect === 'jack') {
-    update.daumenKingId = playerId;
-    update.daumenKingUses = 3;
+  // Skip standard card effects when a custom rule overrides the card
+  const customRule = (room.cardRules ?? {})[String(card.value)];
+  if (!customRule) {
+    if (effect === 'queen') {
+      update.lastQueenId = playerId;
+      update.lastQueenName = playerName;
+    }
+    if (effect === 'jack') {
+      update.daumenKingId = playerId;
+      update.daumenKingUses = 3;
+    }
   }
 
   await updateDoc(doc(db, 'circle', room.id), update);

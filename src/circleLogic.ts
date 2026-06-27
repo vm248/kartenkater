@@ -84,19 +84,25 @@ export function checkGap(
   angles: number[],
 ): boolean {
   const myAngle = angles[removeIdx];
-  let leftDelta = 360;  // angular distance to nearest remaining card going counterclockwise
-  let rightDelta = 360; // angular distance to nearest remaining card going clockwise
+  let leftDelta = 360;
+  let rightDelta = 360;
+  let leftIdx = -1;
+  let rightIdx = -1;
 
+  // Find the two immediate angular neighbors (regardless of drawn status)
   for (let i = 0; i < cards.length; i++) {
-    if (i === removeIdx || cards[i].drawn) continue;
+    if (i === removeIdx) continue;
     const a = angles[i];
-    const cw  = (a - myAngle + 360) % 360; // clockwise to a
-    const ccw = (myAngle - a + 360) % 360; // counterclockwise to a
-    if (cw  < rightDelta) rightDelta = cw;
-    if (ccw < leftDelta)  leftDelta  = ccw;
+    const cw  = (a - myAngle + 360) % 360;
+    const ccw = (myAngle - a + 360) % 360;
+    if (cw  < rightDelta) { rightDelta = cw;  rightIdx = i; }
+    if (ccw < leftDelta)  { leftDelta  = ccw; leftIdx  = i; }
   }
 
-  if (leftDelta === 360 || rightDelta === 360) return false; // last card
+  // No neighbors or only one (same card wraps around) → no gap
+  if (leftIdx === -1 || rightIdx === -1 || leftIdx === rightIdx) return false;
+  // Gap only fires if both immediate neighbors are still present (not already drawn)
+  if (cards[leftIdx].drawn || cards[rightIdx].drawn) return false;
   return (leftDelta + rightDelta) > GAP_THRESHOLD_DEG;
 }
 

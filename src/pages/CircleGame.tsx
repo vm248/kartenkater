@@ -4,6 +4,7 @@ import type { CircleRoom } from '../circleTypes';
 import {
   drawCard, confirmAction, useDaumen, restartCircleGame,
 } from '../circleActions';
+import { haptic } from '../haptic';
 import { cardAngle, polar } from '../circleLogic';
 import { playerColor } from '../playerColors';
 
@@ -68,6 +69,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
 
   async function handleDraw() {
     if (selectedIdx === null) return;
+    haptic('light');
     await drawCard(room, selectedIdx, playerId);
   }
 
@@ -83,11 +85,11 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', minHeight: '70vh', gap: 12,
       }}>
-        {/* Persistent Daumenking bar in overlay too */}
-        {room.daumenKingId && (
+        {/* Persistent Daumenking bar in overlay — hidden when custom rule takes over */}
+        {!customRule && room.daumenKingId && (
           <DaumenBar room={room} playerId={playerId} canUseDaumen={canUseDaumen} />
         )}
-        {room.lastQueenName && (
+        {!customRule && room.lastQueenName && (
           <RuleBar queenName={room.lastQueenName} />
         )}
 
@@ -190,7 +192,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
         </div>
 
         {isActor && (
-          <button style={{ maxWidth: 280 }} onClick={() => confirmAction(room)}>
+          <button style={{ maxWidth: 280 }} onClick={() => { haptic(pa.createdGap ? 'error' : 'success'); confirmAction(room); }}>
             {pa.type === 'number' && pa.distribute ? 'Alles verteilt – weiter' : 'Verstanden – weiter'}
           </button>
         )}
@@ -322,7 +324,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
 
       {/* Selected card confirm */}
       {isMyTurn && selectedIdx !== null && !room.pendingAction && (
-        <div style={{ marginTop: 12, textAlign: 'center', width: '100%', maxWidth: 360 }}>
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 360 }}>
           <button onClick={handleDraw} style={{ maxWidth: 280 }}>Karte ziehen</button>
           <button className="secondary" style={{ maxWidth: 280, marginTop: 6 }}
             onClick={() => setSelectedIdx(null)}>

@@ -91,6 +91,7 @@ export async function joinQuadratRoom(
   const room = snap.data() as QuadratRoom;
   if (room.players[playerId]) return { ok: true };
   if (room.status !== 'lobby') return { ok: false, error: 'Spiel läuft bereits.' };
+  if (room.playerOrder.length >= 15) return { ok: false, error: 'Raum ist voll (max. 15 Spieler).' };
 
   const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
   const insertAt = Math.floor(Math.random() * (room.playerOrder.length + 1));
