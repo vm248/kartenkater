@@ -141,9 +141,20 @@ export default function Game({ room, playerId, onLocalTurnDone }: Props) {
 
   // --- Phase 2 Start: Pyramidenmodus wählen ---
   if (status === 'phase2start') {
+    const la = room.lastAction;
     return (
       <div className="game-area">
         <h1><Bus size={22} strokeWidth={1.75} /> Busfahren</h1>
+
+        {la && (
+          <div key={JSON.stringify(la)} className={`feedback ${la.correct ? 'correct' : 'wrong'}`}>
+            {la.message}
+            <div style={{ marginTop: 6 }}>
+              <CardComponent card={la.card} />
+            </div>
+          </div>
+        )}
+
         <h2>Pyramide</h2>
         <p style={{ textAlign: 'center' }}>Wie soll die Pyramide aufgedeckt werden?</p>
         {isHost ? (

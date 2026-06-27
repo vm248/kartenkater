@@ -85,11 +85,11 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', minHeight: '70vh', gap: 12,
       }}>
-        {/* Persistent Daumenking bar in overlay too */}
-        {room.daumenKingId && (
+        {/* Persistent Daumenking bar in overlay — hidden when custom rule takes over */}
+        {!customRule && room.daumenKingId && (
           <DaumenBar room={room} playerId={playerId} canUseDaumen={canUseDaumen} />
         )}
-        {room.lastQueenName && (
+        {!customRule && room.lastQueenName && (
           <RuleBar queenName={room.lastQueenName} />
         )}
 

@@ -157,6 +157,5 @@ Kein CSS-Framework. Globale CSS Custom Properties in `src/index.css` für Light/
 - [x] **Fehler melden** – erledigt: Bottom Bar + Modal + Firestore `errors`-Collection
 - [x] **Hilfe-Modal Multiplayer-Tab** – erledigt
 - [x] **Developer Dashboard** – erledigt: `/?dashboard`, GitHub Auth, Stats, Räume, Fehlerberichte, Cleanup
-- [ ] **Circle: Regelanzeige für Kategorie (König)**: analog zur Damen-Regel speichern und anzeigen
 - [ ] **Firestore Security Rules deployen**: nach jeder Änderung manuell in Firebase Console einspielen (Firestore → Regeln → Veröffentlichen)
 - [ ] **Offline-Modus** (explizit zurückgestellt): Service Worker cacht nur Assets, keine Offline-Spiellogik
