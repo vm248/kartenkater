@@ -199,13 +199,17 @@ export async function drawCard(
   if (effect === 'ace_normal' || effect === 'ace_ex') {
     update.acesDrawn = room.acesDrawn + 1;
   }
-  if (effect === 'queen') {
-    update.lastQueenId = playerId;
-    update.lastQueenName = playerName;
-  }
-  if (effect === 'jack') {
-    update.daumenKingId = playerId;
-    update.daumenKingUses = 3;
+  // Skip standard card effects when a custom rule overrides the card
+  const customRule = (room.cardRules ?? {})[String(card.value)];
+  if (!customRule) {
+    if (effect === 'queen') {
+      update.lastQueenId = playerId;
+      update.lastQueenName = playerName;
+    }
+    if (effect === 'jack') {
+      update.daumenKingId = playerId;
+      update.daumenKingUses = 3;
+    }
   }
 
   await updateDoc(doc(db, 'circle', room.id), update);

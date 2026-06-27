@@ -473,9 +473,11 @@ if (!errorText.trim() || errorSubmitting) return;
                   Teile den Code und warte, bis jemand beitritt.
                 </p>
                 <div className="room-code" style={{ margin: '0 0 10px' }}>{popupCode}</div>
-                <button className="copy-btn" onClick={handlePopupCopy} style={{ marginBottom: 16 }}>
-                  {popupCopied ? <><Check size={13} strokeWidth={2.5} /> Kopiert!</> : <><Copy size={13} /> Code kopieren</>}
-                </button>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                  <button className="copy-btn" onClick={handlePopupCopy}>
+                    {popupCopied ? <><Check size={13} strokeWidth={2.5} /> Kopiert!</> : <><Copy size={13} /> Code kopieren</>}
+                  </button>
+                </div>
               </>
             ) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 16px' }}>

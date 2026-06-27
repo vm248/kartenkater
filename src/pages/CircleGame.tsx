@@ -324,7 +324,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
 
       {/* Selected card confirm */}
       {isMyTurn && selectedIdx !== null && !room.pendingAction && (
-        <div style={{ marginTop: 12, textAlign: 'center', width: '100%', maxWidth: 360 }}>
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 360 }}>
           <button onClick={handleDraw} style={{ maxWidth: 280 }}>Karte ziehen</button>
           <button className="secondary" style={{ maxWidth: 280, marginTop: 6 }}
             onClick={() => setSelectedIdx(null)}>
