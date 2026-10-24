@@ -1,4 +1,4 @@
-import type { Card, CardValue, CardSuit, GameSettings, PyramidCell } from './types';
+import type { Card, CardValue, CardSuit, GameSettings, PyramidCell, Player } from './types';
 
 const SUITS: CardSuit[] = ['♥', '♦', '♣', '♠'];
 const ALL_VALUES: CardValue[] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'B', 'D', 'K', 'A'];
@@ -14,6 +14,40 @@ export function valueToNum(v: CardValue): number {
 
 export function isRed(card: Card): boolean {
   return card.suit === '♥' || card.suit === '♦';
+}
+
+/** Lowest card value in the deck (Skat starts at 7). */
+export function minDeckValue(settings: GameSettings): number {
+  return settings.deckType === 'skat' ? 7 : 2;
+}
+
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/** Keeps settings within the ranges the game can actually handle. */
+export function clampSettings(s: GameSettings): GameSettings {
+  return {
+    deckType: s.deckType === 'full' ? 'full' : 'skat',
+    guessDeckCount: clampInt(s.guessDeckCount, 1, 3, 1),
+    busDeckCount: clampInt(s.busDeckCount, 1, 3, 1),
+    pyramidRows: clampInt(s.pyramidRows, 3, 6, 3),
+    cardsPerRound: clampInt(s.cardsPerRound, 1, 4, 3),
+    busDifficulty: s.busDifficulty === 'easy' || s.busDifficulty === 'schwer' ? s.busDifficulty : 'normal',
+  };
+}
+
+/** Players with the most remaining cards; one entry = Busfahrer, several = Stechen. */
+export function busfahrerCandidates(players: Record<string, Player>, order: string[]): string[] {
+  if (order.length === 0) return [];
+  const maxCards = Math.max(...order.map(id => players[id]?.hand.length ?? 0));
+  return order.filter(id => (players[id]?.hand.length ?? 0) === maxCards);
+}
+
+export function cardLabel(card: Card): string {
+  return `${card.value}${card.suit}`;
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -60,26 +94,53 @@ export function buildRevealOrder(rows: number, mode: 'top' | 'bottom'): number[]
   return mode === 'top' ? rowArrays.flat() : [...rowArrays].reverse().flat();
 }
 
+export const GUESS_EQUAL = 'Gleich';
+export const GUESS_BORDER = 'Auf der Grenze';
+
+/** Compare-based guess: 'Höher' / 'Tiefer' / 'Gleich' against a reference value. */
+export function evaluateHigherLower(guess: string, cv: number, rv: number): boolean {
+  if (guess === 'Höher') return cv > rv;
+  if (guess === 'Tiefer') return cv < rv;
+  if (guess === GUESS_EQUAL) return cv === rv;
+  return false;
+}
+
+/** Range-based guess: 'Innerhalb' / 'Außerhalb' / 'Auf der Grenze' between two boundary values. */
+export function evaluateInsideOutside(guess: string, cv: number, v1: number, v2: number): boolean {
+  const min = Math.min(v1, v2);
+  const max = Math.max(v1, v2);
+  if (guess === 'Innerhalb') return cv > min && cv < max;
+  if (guess === 'Außerhalb') return cv < min || cv > max;
+  if (guess === GUESS_BORDER) return cv === min || cv === max;
+  return false;
+}
+
+/** Options that can never win (e.g. "Höher" than an Ass, "Innerhalb" of 9 and 9). */
+export function impossibleHigherLower(rv: number, minValue: number): string[] {
+  const out: string[] = [];
+  if (rv >= 14) out.push('Höher');
+  if (rv <= minValue) out.push('Tiefer');
+  return out;
+}
+
+export function impossibleInsideOutside(v1: number, v2: number, minValue: number): string[] {
+  const min = Math.min(v1, v2);
+  const max = Math.max(v1, v2);
+  const out: string[] = [];
+  if (max - min <= 1) out.push('Innerhalb');
+  if (min <= minValue && max >= 14) out.push('Außerhalb');
+  return out;
+}
+
 export function evaluateGuess(guess: string, step: number, card: Card, hand: Card[]): boolean {
   if (step === 0) {
     return (guess === 'Rot' && isRed(card)) || (guess === 'Schwarz' && !isRed(card));
   }
   if (step === 1) {
-    return (
-      (guess === 'Höher' && valueToNum(card.value) > valueToNum(hand[0].value)) ||
-      (guess === 'Tiefer' && valueToNum(card.value) < valueToNum(hand[0].value))
-    );
+    return evaluateHigherLower(guess, valueToNum(card.value), valueToNum(hand[0].value));
   }
   if (step === 2) {
-    const v1 = valueToNum(hand[0].value);
-    const v2 = valueToNum(hand[1].value);
-    const min = Math.min(v1, v2);
-    const max = Math.max(v1, v2);
-    const cv = valueToNum(card.value);
-    return (
-      (guess === 'Innerhalb' && cv > min && cv < max) ||
-      (guess === 'Außerhalb' && (cv < min || cv > max))
-    );
+    return evaluateInsideOutside(guess, valueToNum(card.value), valueToNum(hand[0].value), valueToNum(hand[1].value));
   }
   const suits = hand.slice(0, 3).map(c => c.suit);
   const has = suits.includes(card.suit);

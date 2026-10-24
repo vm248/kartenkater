@@ -72,6 +72,8 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
   }
 
   async function handleLocalStart() {
+    // Player 1 carries this device's ID, so it must not be empty
+    if (!localPlayers[0].name.trim()) return setError('Bitte zuerst Spieler 1 eintragen.');
     const filled = localPlayers.filter(p => p.name.trim());
     if (filled.length < 2) return setError('Mindestens 2 Namen eingeben.');
     setLoading(true);
@@ -102,7 +104,7 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
           <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
             <input
               type="text"
-              placeholder={`Spieler ${i + 1}`}
+              placeholder={i === 0 ? 'Spieler 1 (Pflicht)' : `Spieler ${i + 1}`}
               value={p.name}
               onChange={e => updateLocalName(i, e.target.value)}
               maxLength={20}
@@ -112,6 +114,7 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
               <button
                 onClick={() => removeLocalPlayer(i)}
                 style={{ width: 'auto', padding: '8px 12px', margin: 0, flexShrink: 0 }}
+                aria-label={`Spieler ${i + 1} entfernen`}
               >
                 <X size={15} />
               </button>

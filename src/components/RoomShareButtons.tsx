@@ -15,17 +15,17 @@ export default function RoomShareButtons({ roomId, game }: Props) {
   const url = `${window.location.origin}${window.location.pathname}?join=${roomId}&game=${game}`;
 
   function handleCopyCode() {
-    navigator.clipboard.writeText(roomId).then(() => {
+    navigator.clipboard?.writeText(roomId).then(() => {
       setCodeCopied(true);
       setTimeout(() => setCodeCopied(false), 2000);
-    });
+    }).catch(() => { /* clipboard blocked - code is visible anyway */ });
   }
 
   function handleCopyLink() {
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard?.writeText(url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
-    });
+    }).catch(() => setShowQr(true));
   }
 
   return (
@@ -67,6 +67,7 @@ export default function RoomShareButtons({ roomId, game }: Props) {
               <button
                 className="icon-btn icon-btn-ghost"
                 onClick={() => setShowQr(false)}
+                aria-label="Schließen"
                 style={{ width: 32, height: 32 }}
               >
                 <X size={18} />

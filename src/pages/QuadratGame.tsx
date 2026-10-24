@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Grid3x3, Check, X, RotateCcw, Clock, Beer } from 'lucide-react';
 import type { QuadratRoom, QCell } from '../quadratTypes';
-import { isAvailable, COMPARISON, CELL_TYPES } from '../quadratLogic';
+import { isAvailable, COMPARISON, getQuadratGuessOptions, impossibleQuadratOptions } from '../quadratLogic';
+import { cardLabel } from '../gameLogic';
 import { makeQuadratGuess, giveSip, finishSipDistribution, restartQuadratGame, passQuadratTurn, confirmQuadratDrink } from '../quadratActions';
 import { playerColor } from '../playerColors';
 import CardComponent from '../components/CardComponent';
@@ -10,11 +11,34 @@ import Confetti from '../components/Confetti';
 interface Props {
   room: QuadratRoom;
   playerId: string;
+  isLocalMode?: boolean;
 }
 
-function getGuessOptions(cell: QCell): string[] {
-  if (cell.type === 'M') return ['Innerhalb', 'Außerhalb'];
-  return ['Höher', 'Tiefer'];
+function sipsLabel(n: number): string {
+  return `${n} ${n === 1 ? 'Schluck' : 'Schlücke'}`;
+}
+
+/** Who got how many sips from the winner – visible to everyone. */
+function SipsSummary({ room }: { room: QuadratRoom }) {
+  const entries = room.playerOrder
+    .map(id => ({ id, n: room.sipsGiven?.[id] ?? 0 }))
+    .filter(e => e.n > 0);
+  if (entries.length === 0) return null;
+  return (
+    <ul className="player-list" style={{ marginTop: 8 }}>
+      {entries.map(({ id, n }) => (
+        <li key={id}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="player-dot" style={{ background: playerColor(room.playerOrder, id) }} />
+            {room.players[id]?.name}
+          </span>
+          <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {sipsLabel(n)} <Beer size={13} strokeWidth={2} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function ComparisonDisplay({ cell, grid }: { cell: QCell; grid: QCell[] }) {
@@ -46,13 +70,19 @@ function ComparisonDisplay({ cell, grid }: { cell: QCell; grid: QCell[] }) {
   );
 }
 
-export default function QuadratGame({ room, playerId }: Props) {
+export default function QuadratGame({ room, playerId, isLocalMode }: Props) {
   const [selectedCell, setSelectedCell] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [passPopup, setPassPopup] = useState(false);
 
   const { status, grid, currentPlayerIndex, playerOrder, streak, lastAction, players, awaitingDrinkConfirm } = room;
-  const isHost = room.hostId === playerId;
+  const isHost = isLocalMode || room.hostId === playerId;
+
+  async function run(action: () => Promise<void>) {
+    if (loading) return;
+    setLoading(true);
+    try { await action(); } finally { setLoading(false); }
+  }
 
   // --- Distributing phase ---
   if (status === 'distributing') {
@@ -62,9 +92,11 @@ export default function QuadratGame({ room, playerId }: Props) {
         <Confetti />
         <div className="game-area">
           <h1><Grid3x3 size={22} strokeWidth={1.75} /> Das Fenster</h1>
-          <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
-            {room.id}
-          </p>
+          {!room.isLocal && (
+            <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
+              {room.id}
+            </p>
+          )}
           <div className="info-box">
             <p style={{ fontSize: 20, fontWeight: 700, margin: '0 0 4px' }}>
               {room.winnerName} hat das Quadrat gelöst!
@@ -77,7 +109,7 @@ export default function QuadratGame({ room, playerId }: Props) {
           {isWinner && (
             <>
               <p style={{ textAlign: 'center', fontWeight: 700, fontSize: 18 }}>
-                Noch {room.sipsRemaining} Schlücke
+                Noch {sipsLabel(room.sipsRemaining)}
               </p>
               <ul className="player-list">
                 {playerOrder.filter(id => id !== playerId).map(id => {
@@ -96,7 +128,8 @@ export default function QuadratGame({ room, playerId }: Props) {
                       </span>
                       <button
                         style={{ width: 'auto', padding: '6px 16px', margin: 0, fontSize: 15 }}
-                        onClick={() => giveSip(room, id)}
+                        onClick={() => run(() => giveSip(room, id))}
+                        aria-label={`${players[id]?.name} einen Schluck geben`}
                         disabled={room.sipsRemaining <= 0 || loading}
                       >
                         +1
@@ -105,16 +138,19 @@ export default function QuadratGame({ room, playerId }: Props) {
                   );
                 })}
               </ul>
-              <button onClick={() => finishSipDistribution(room)} style={{ marginTop: 8 }}>
+              <button onClick={() => run(() => finishSipDistribution(room))} disabled={loading} style={{ marginTop: 8 }}>
                 {room.sipsRemaining > 0 ? `Fertig (${room.sipsRemaining} übrig)` : 'Fertig'}
               </button>
             </>
           )}
 
           {!isWinner && (
-            <div className="waiting-text">
-              {room.winnerName} verteilt Schlücke…
-            </div>
+            <>
+              <div className="waiting-text">
+                {room.winnerName} verteilt Schlücke… (noch {room.sipsRemaining})
+              </div>
+              <SipsSummary room={room} />
+            </>
           )}
         </div>
       </>
@@ -128,17 +164,20 @@ export default function QuadratGame({ room, playerId }: Props) {
         <Confetti />
         <div className="game-area">
           <h1><Grid3x3 size={22} strokeWidth={1.75} /> Das Fenster</h1>
-          <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
-            {room.id}
-          </p>
+          {!room.isLocal && (
+            <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
+              {room.id}
+            </p>
+          )}
           <div className="info-box">
             <p style={{ fontSize: 20, fontWeight: 700, margin: '0 0 4px' }}>
               {room.winnerName} hat das Quadrat gelöst!
             </p>
             <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 15 }}>Prost an alle!</p>
           </div>
+          <SipsSummary room={room} />
           {isHost && (
-            <button onClick={() => restartQuadratGame(room)}>
+            <button onClick={() => run(() => restartQuadratGame(room))} disabled={loading}>
               <RotateCcw size={15} /> Nochmal spielen
             </button>
           )}
@@ -159,27 +198,28 @@ export default function QuadratGame({ room, playerId }: Props) {
   const isMyTurn = currentPlayerId === playerId;
 
   async function handleGuess(guess: string) {
-    if (selectedCell === null || loading) return;
-    setLoading(true);
-    await makeQuadratGuess(room, selectedCell, guess, playerId);
-    setSelectedCell(null);
-    setLoading(false);
+    if (selectedCell === null) return;
+    const cell = selectedCell;
+    await run(async () => {
+      await makeQuadratGuess(room, cell, guess, playerId);
+      setSelectedCell(null);
+    });
   }
 
   const selectedCellData = selectedCell !== null ? grid[selectedCell] : null;
 
   async function handlePass() {
-    setLoading(true);
-    await passQuadratTurn(room);
-    setPassPopup(false);
-    setLoading(false);
+    await run(async () => {
+      await passQuadratTurn(room);
+      setPassPopup(false);
+    });
   }
 
   async function handleConfirmDrink() {
-    setLoading(true);
-    await confirmQuadratDrink(room);
-    setLoading(false);
+    await run(() => confirmQuadratDrink(room));
   }
+
+  const impossible = selectedCell !== null ? impossibleQuadratOptions(selectedCell, grid) : [];
 
   return (
     <div className="game-area">
@@ -194,24 +234,27 @@ export default function QuadratGame({ room, playerId }: Props) {
           }}>
             <Beer size={32} strokeWidth={1.5} color="var(--primary)" style={{ margin: '0 auto 8px' }} />
             <p style={{ fontSize: 20, fontWeight: 700, margin: '0 0 6px' }}>
-              Verteile {streak} Schlück{streak === 1 ? '' : 'e'}!
+              Verteile {sipsLabel(streak)}!
             </p>
             <p style={{ opacity: 0.6, fontSize: 14, margin: '0 0 20px' }}>
-              Sag deinen Mitspielern wer trinken muss.
+              Sag deinen Mitspielern wer trinken muss. Danach ist der nächste Spieler dran.
             </p>
-            <button onClick={handlePass} disabled={loading}>Fertig</button>
+            <button onClick={handlePass} disabled={loading}>Verteilt – weitergeben</button>
+            <button className="secondary" onClick={() => setPassPopup(false)} disabled={loading}>Abbrechen</button>
           </div>
         </div>
       )}
       <h1><Grid3x3 size={22} strokeWidth={1.75} /> Das Fenster</h1>
-      <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
-        {room.id}
-      </p>
+      {!room.isLocal && (
+        <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.45, margin: '-8px 0 8px', letterSpacing: 2, fontWeight: 600 }}>
+          {room.id}
+        </p>
+      )}
 
       {/* Turn + streak */}
       <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
         <h2 style={{ margin: 0 }}>
-          {isMyTurn ? 'Du bist dran!' : (
+          {isMyTurn ? (isLocalMode ? `${players[currentPlayerId]?.name}, du bist dran!` : 'Du bist dran!') : (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
               <Clock size={17} strokeWidth={2} /> {players[currentPlayerId]?.name}…
             </span>
@@ -219,7 +262,7 @@ export default function QuadratGame({ room, playerId }: Props) {
         </h2>
         {streak > 0 && (
           <div style={{ marginTop: 6, fontSize: 14, opacity: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            <Beer size={14} strokeWidth={2} /> {streak} Schlück{streak === 1 ? '' : 'e'} zum Weitergeben
+            <Beer size={14} strokeWidth={2} /> {sipsLabel(streak)} zum Verteilen gesammelt
           </div>
         )}
       </div>
@@ -227,9 +270,10 @@ export default function QuadratGame({ room, playerId }: Props) {
       {/* Last action feedback */}
       {lastAction && (
         <div key={JSON.stringify(lastAction)} className={`feedback ${lastAction.correct ? 'correct' : 'wrong'}`} style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {lastAction.correct
-            ? <><Check size={14} strokeWidth={2.5} /> {lastAction.playerName}: „{lastAction.guess}" – Richtig!</>
-            : <><X size={14} strokeWidth={2.5} /> {lastAction.playerName}: „{lastAction.guess}" – Falsch! {lastAction.drinkCount}× trinken.</>}
+          {lastAction.correct ? <Check size={14} strokeWidth={2.5} /> : <X size={14} strokeWidth={2.5} />}
+          {lastAction.playerName}: „{lastAction.guess}" – {cardLabel(lastAction.card)}
+          {lastAction.compare?.length ? ` vs. ${lastAction.compare.map(cardLabel).join(' / ')}` : ''}
+          {lastAction.correct ? ' – Richtig!' : ` – Falsch! ${lastAction.drinkCount}× trinken.`}
         </div>
       )}
 
@@ -280,12 +324,22 @@ export default function QuadratGame({ room, playerId }: Props) {
         <div className="info-box" style={{ marginTop: '0.5rem' }}>
           <ComparisonDisplay cell={selectedCellData} grid={grid} />
           <div className="choices" style={{ marginTop: '0.75rem' }}>
-            {getGuessOptions(selectedCellData).map(opt => (
-              <button key={opt} onClick={() => handleGuess(opt)} disabled={loading}>
+            {getQuadratGuessOptions(selectedCellData).map(opt => (
+              <button
+                key={opt}
+                onClick={() => handleGuess(opt)}
+                disabled={loading || impossible.includes(opt)}
+                title={impossible.includes(opt) ? 'Kann hier nicht gewinnen' : undefined}
+              >
                 {opt}
               </button>
             ))}
           </div>
+          {impossible.length > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', margin: '6px 0 0' }}>
+              Ausgegraut: kann mit diesen Karten nicht richtig sein.
+            </p>
+          )}
           <button
             className="secondary"
             onClick={() => setSelectedCell(null)}
@@ -309,7 +363,7 @@ export default function QuadratGame({ room, playerId }: Props) {
               disabled={loading}
               style={{ width: 'auto', padding: '8px 20px' }}
             >
-              Weitergeben ({streak} Schlück{streak === 1 ? '' : 'e'} verteilen)
+              Weitergeben ({sipsLabel(streak)} verteilen)
             </button>
           )}
         </div>
@@ -319,7 +373,7 @@ export default function QuadratGame({ room, playerId }: Props) {
         isMyTurn ? (
           <div style={{ textAlign: 'center', marginTop: '1rem' }}>
             <p style={{ fontWeight: 700, fontSize: 18, margin: '0 0 12px' }}>
-              {lastAction?.drinkCount}× trinken!
+              {sipsLabel(lastAction?.drinkCount ?? 0)} trinken!
             </p>
             <button onClick={handleConfirmDrink} disabled={loading}>
               <Check size={16} strokeWidth={2.5} /> Getrunken – Weiter!
@@ -327,7 +381,7 @@ export default function QuadratGame({ room, playerId }: Props) {
           </div>
         ) : (
           <div className="waiting-text">
-            {players[currentPlayerId]?.name} trinkt {lastAction?.drinkCount} Schlücke…
+            {players[currentPlayerId]?.name} trinkt {sipsLabel(lastAction?.drinkCount ?? 0)}…
           </div>
         )
       )}
@@ -351,7 +405,7 @@ export default function QuadratGame({ room, playerId }: Props) {
             >
               <span className="player-dot" style={{ background: color }} />
               {players[id]?.name}
-              {id === playerId && ' (Du)'}
+              {id === playerId && !isLocalMode && ' (Du)'}
             </div>
           );
         })}

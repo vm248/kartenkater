@@ -7,10 +7,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registration happens in src/registerSW.ts (with periodic update checks)
+      injectRegister: false,
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+      },
       manifest: {
         name: 'Kartenkater',
         short_name: 'Kartenkater',
         description: 'Multiplayer Trinkkartenspiele',
+        lang: 'de',
         theme_color: '#111111',
         background_color: '#111111',
         display: 'standalone',

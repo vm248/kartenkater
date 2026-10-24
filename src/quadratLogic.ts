@@ -1,6 +1,9 @@
 import type { Card, CardSuit, CardValue } from './types';
 import type { QCell, QCellType } from './quadratTypes';
-import { valueToNum } from './gameLogic';
+import {
+  valueToNum, evaluateHigherLower, evaluateInsideOutside,
+  impossibleHigherLower, impossibleInsideOutside, GUESS_EQUAL, GUESS_BORDER,
+} from './gameLogic';
 
 const SUITS: CardSuit[] = ['♥', '♦', '♣', '♠'];
 const VALUES: CardValue[] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'B', 'D', 'K', 'A'];
@@ -79,33 +82,33 @@ export function isAvailable(cellIndex: number, grid: QCell[]): boolean {
   return (UNLOCK[cellIndex] ?? []).every(pos => grid[pos].revealed);
 }
 
+/** Comparison card positions for a cell (one for S/I, two boundaries for M). */
+export function comparisonPositions(cellIndex: number): number[] {
+  const comp = COMPARISON[cellIndex];
+  if (comp === undefined) return [];
+  return Array.isArray(comp) ? comp : [comp];
+}
+
+export function getQuadratGuessOptions(cell: QCell): string[] {
+  if (cell.type === 'M') return ['Innerhalb', GUESS_BORDER, 'Außerhalb'];
+  return ['Höher', GUESS_EQUAL, 'Tiefer'];
+}
+
+/** Options that can never be right for this cell (e.g. "Höher" than an Ass). */
+export function impossibleQuadratOptions(cellIndex: number, grid: QCell[]): string[] {
+  const cell = grid[cellIndex];
+  const comp = comparisonPositions(cellIndex).map(p => valueToNum(grid[p].card!.value));
+  if (cell.type === 'M') return impossibleInsideOutside(comp[0], comp[1], 2);
+  return impossibleHigherLower(comp[0], 2);
+}
+
 export function evaluateQuadratGuess(guess: string, cellIndex: number, grid: QCell[]): boolean {
   const cell = grid[cellIndex];
   const cv = valueToNum(cell.card!.value);
-  const comp = COMPARISON[cellIndex];
+  const comp = comparisonPositions(cellIndex).map(p => valueToNum(grid[p].card!.value));
 
-  if (cell.type === 'S') {
-    const rv = valueToNum(grid[comp as number].card!.value);
-    if (guess === 'Höher') return cv > rv;
-    if (guess === 'Tiefer') return cv < rv;
-  }
-
-  if (cell.type === 'M') {
-    const [p1, p2] = comp as [number, number];
-    const v1 = valueToNum(grid[p1].card!.value);
-    const v2 = valueToNum(grid[p2].card!.value);
-    const min = Math.min(v1, v2);
-    const max = Math.max(v1, v2);
-    if (guess === 'Innerhalb') return cv > min && cv < max;
-    if (guess === 'Außerhalb') return cv < min || cv > max;
-  }
-
-  if (cell.type === 'I') {
-    const rv = valueToNum(grid[comp as number].card!.value);
-    if (guess === 'Höher') return cv > rv;
-    if (guess === 'Tiefer') return cv < rv;
-  }
-
+  if (cell.type === 'M') return evaluateInsideOutside(guess, cv, comp[0], comp[1]);
+  if (cell.type === 'S' || cell.type === 'I') return evaluateHigherLower(guess, cv, comp[0]);
   return false;
 }
 

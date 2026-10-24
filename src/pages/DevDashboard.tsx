@@ -1,11 +1,16 @@
 import { useEffect, useState, useCallback } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, GithubAuthProvider, User } from 'firebase/auth';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { getAuth, onAuthStateChanged, signInWithPopup, signOut, GithubAuthProvider, type User } from 'firebase/auth';
+import { collection, getDocs, deleteDoc, doc, query, orderBy, limit } from 'firebase/firestore';
+import { app, db } from '../firebase';
 import { LogIn, LogOut, RefreshCw, Trash2 } from 'lucide-react';
 
+// Client-side gate only – the real protection is isAdmin() in firestore.rules (UID check)
 const ALLOWED_EMAIL = 'vooke.meyer@t-online.de';
+const auth = getAuth(app);
 const provider = new GithubAuthProvider();
+const ERRORS_LIMIT = 200;
+// Cleanup leaves fresh lobbies alone (a host may be waiting for players)
+const CLEANUP_MIN_AGE_MS = 60 * 60 * 1000;
 const COL: Record<string, string> = { busfahren: 'rooms', quadrat: 'quadrat', circle: 'circle' };
 const GAME_LABEL: Record<string, string> = { busfahren: 'Busfahren', quadrat: 'Das Fenster', circle: 'Circle' };
 
@@ -28,7 +33,7 @@ function formatAge(ts: number): string {
 }
 
 function formatTs(ts: number): string {
-  return new Date(ts).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(ts).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -64,6 +69,7 @@ export default function DevDashboard() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [errors, setErrors] = useState<ErrorRow[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState('');
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -81,12 +87,13 @@ export default function DevDashboard() {
 
   const loadData = useCallback(async () => {
     setDataLoading(true);
+    setDataError('');
     try {
       const [roomsSnap, quadratSnap, circleSnap, errorsSnap] = await Promise.all([
         getDocs(collection(db, 'rooms')),
         getDocs(collection(db, 'quadrat')),
         getDocs(collection(db, 'circle')),
-        getDocs(collection(db, 'errors')),
+        getDocs(query(collection(db, 'errors'), orderBy('timestamp', 'desc'), limit(ERRORS_LIMIT))),
       ]);
 
       const allRooms: RoomRow[] = [
@@ -101,6 +108,8 @@ export default function DevDashboard() {
 
       setRooms(allRooms);
       setErrors(allErrors);
+    } catch (e) {
+      setDataError(`Laden fehlgeschlagen: ${(e as Error).message ?? e}. Stimmt die Admin-UID in den Firestore-Regeln?`);
     } finally {
       setDataLoading(false);
     }
@@ -110,27 +119,41 @@ export default function DevDashboard() {
     if (user) loadData();
   }, [user, loadData]);
 
+  function reportFailures(results: PromiseSettledResult<unknown>[]) {
+    const failed = results.filter(r => r.status === 'rejected').length;
+    setDataError(failed ? `${failed} Löschvorgang/-vorgänge fehlgeschlagen.` : '');
+  }
+
   async function deleteRoom(game: string, id: string) {
-    await deleteDoc(doc(db, COL[game], id));
-    setRooms(r => r.filter(x => x.id !== id));
+    const results = await Promise.allSettled([deleteDoc(doc(db, COL[game], id))]);
+    reportFailures(results);
+    if (results[0].status === 'fulfilled') setRooms(r => r.filter(x => x.id !== id || x.game !== game));
   }
 
   async function deleteError(id: string) {
-    await deleteDoc(doc(db, 'errors', id));
-    setErrors(e => e.filter(x => x.id !== id));
+    const results = await Promise.allSettled([deleteDoc(doc(db, 'errors', id))]);
+    reportFailures(results);
+    if (results[0].status === 'fulfilled') setErrors(e => e.filter(x => x.id !== id));
   }
 
   async function deleteAllErrors() {
-    if (!errors.length) return;
-    await Promise.all(errors.map(e => deleteDoc(doc(db, 'errors', e.id))));
-    setErrors([]);
+    if (!errors.length || !window.confirm(`Alle ${errors.length} Fehlerberichte löschen?`)) return;
+    const results = await Promise.allSettled(errors.map(e => deleteDoc(doc(db, 'errors', e.id))));
+    reportFailures(results);
+    const deleted = new Set(errors.filter((_, i) => results[i].status === 'fulfilled').map(e => e.id));
+    setErrors(prev => prev.filter(e => !deleted.has(e.id)));
   }
 
+  const isCleanupCandidate = (r: RoomRow) =>
+    (r.status === 'finished' || r.players <= 1) && Date.now() - r.createdAt > CLEANUP_MIN_AGE_MS;
+
   async function cleanupRooms() {
-    const toDelete = rooms.filter(r => r.status === 'finished' || r.players <= 1);
+    const toDelete = rooms.filter(isCleanupCandidate);
     if (!toDelete.length) return;
-    await Promise.all(toDelete.map(r => deleteDoc(doc(db, COL[r.game], r.id))));
-    setRooms(prev => prev.filter(x => !toDelete.find(d => d.id === x.id)));
+    const results = await Promise.allSettled(toDelete.map(r => deleteDoc(doc(db, COL[r.game], r.id))));
+    reportFailures(results);
+    const deleted = new Set(toDelete.filter((_, i) => results[i].status === 'fulfilled').map(r => r.game + r.id));
+    setRooms(prev => prev.filter(x => !deleted.has(x.game + x.id)));
   }
 
   // ── Auth loading ──────────────────────────────────────────────
@@ -175,7 +198,7 @@ export default function DevDashboard() {
   const statQuadrat = rooms.filter(r => r.game === 'quadrat').length;
   const statCircle = rooms.filter(r => r.game === 'circle').length;
   const activePlayers = rooms.reduce((s, r) => s + r.players, 0);
-  const cleanupCount = rooms.filter(r => r.status === 'finished' || r.players <= 1).length;
+  const cleanupCount = rooms.filter(isCleanupCandidate).length;
 
   // ── Dashboard ─────────────────────────────────────────────────
   return (
@@ -186,17 +209,22 @@ export default function DevDashboard() {
         <div>
           <p style={{ fontWeight: 800, fontSize: 19, margin: 0, color: 'var(--text)' }}>Dashboard</p>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0' }}>{user.email}</p>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', fontFamily: 'monospace', wordBreak: 'break-all' }}>UID: {user.uid}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={loadData} disabled={dataLoading} style={{ ...btnBase, gap: 6, padding: '8px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--card)', color: 'var(--text-muted)', fontSize: 13, fontWeight: 600, boxShadow: 'none' }}>
             <RefreshCw size={14} strokeWidth={2} style={{ animation: dataLoading ? 'spin 1s linear infinite' : 'none' }} />
             {dataLoading ? 'Laden…' : 'Refresh'}
           </button>
-          <button onClick={() => signOut(auth)} style={{ ...btnBase, padding: '8px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--card)', color: 'var(--text-muted)', boxShadow: 'none' }}>
+          <button onClick={() => signOut(auth)} aria-label="Abmelden" title="Abmelden" style={{ ...btnBase, padding: '8px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--card)', color: 'var(--text-muted)', boxShadow: 'none' }}>
             <LogOut size={14} strokeWidth={2} />
           </button>
         </div>
       </div>
+
+      {dataError && (
+        <div className="feedback wrong" style={{ marginBottom: 16, fontSize: 13 }}>{dataError}</div>
+      )}
 
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
@@ -243,7 +271,7 @@ export default function DevDashboard() {
                       <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.userAgent}</p>
                     )}
                   </div>
-                  <button onClick={() => deleteError(e.id)} style={delBtn}>
+                  <button onClick={() => deleteError(e.id)} style={delBtn} aria-label="Fehlerbericht löschen" title="Löschen">
                     <Trash2 size={15} strokeWidth={2} />
                   </button>
                 </div>
@@ -275,7 +303,7 @@ export default function DevDashboard() {
                 <GameBadge game={r.game} />
                 <StatusBadge status={r.status} />
                 <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{r.players}P · {formatAge(r.createdAt)}</span>
-                <button onClick={() => deleteRoom(r.game, r.id)} style={delBtn}>
+                <button onClick={() => deleteRoom(r.game, r.id)} style={delBtn} aria-label={`Raum ${r.id} löschen`} title="Löschen">
                   <Trash2 size={14} strokeWidth={2} />
                 </button>
               </div>

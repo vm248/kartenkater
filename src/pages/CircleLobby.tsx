@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Circle, LogOut, Play, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { CircleRoom } from '../circleTypes';
-import { startCircleGame, kickCirclePlayer, updateCardRules } from '../circleActions';
+import { startCircleGame, kickCirclePlayer, updateCardRule } from '../circleActions';
+import { MAX_PLAYERS } from '../roomUtils';
 import { playerColor } from '../playerColors';
 import RoomShareButtons from '../components/RoomShareButtons';
 
@@ -31,13 +32,14 @@ const CARD_STANDARD_RULES: Record<string, string> = {
   'B':  'Daumenking (3× nutzbar)',
   'D':  'Regel aufstellen',
   'K':  'Kategorie nennen',
-  'A':  '1.–3. Ass normal · 4. Ass: alle exen',
+  'A':  '1.–3. Ass normal · 4. Ass: wer es zieht, muss exen',
 };
 
 
 export default function CircleLobby({ room, playerId }: Props) {
   const isHost = room.hostId === playerId;
   const [leaveMsg, setLeaveMsg] = useState('');
+  const [starting, setStarting] = useState(false);
   const prevOrderRef = useRef<string[]>(room.playerOrder);
   const prevPlayersRef = useRef(room.players);
 
@@ -57,9 +59,13 @@ export default function CircleLobby({ room, playerId }: Props) {
     <div className="game-area">
       <h1><Circle size={22} strokeWidth={1.75} /> Circle</h1>
 
-      <h2>Raum-Code</h2>
-      <div className="room-code">{room.id}</div>
-      <RoomShareButtons roomId={room.id} game="circle" />
+      {!room.isLocal && (
+        <>
+          <h2>Raum-Code</h2>
+          <div className="room-code">{room.id}</div>
+          <RoomShareButtons roomId={room.id} game="circle" />
+        </>
+      )}
 
       {leaveMsg && (
         <div className="leave-toast" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -84,6 +90,8 @@ export default function CircleLobby({ room, playerId }: Props) {
                   className="danger"
                   style={{ width: 'auto', padding: '8px 14px', fontSize: 13, margin: 0 }}
                   onClick={() => kickCirclePlayer(room, id)}
+                  aria-label={`${room.players[id]?.name} entfernen`}
+                  title="Entfernen"
                 >
                   <X size={13} strokeWidth={2.5} />
                 </button>
@@ -103,7 +111,7 @@ export default function CircleLobby({ room, playerId }: Props) {
           <strong>Bube</strong> → Daumenking (3× aktivierbar)<br />
           <strong>Dame</strong> → Regel aufstellen<br />
           <strong>König</strong> → Kategorie<br />
-          <strong>4. Ass</strong> → Exen · <strong>Lücke reißen</strong> → Exen
+          <strong>4. Ass</strong> → Exen · <strong>Lücke reißen</strong> (erste im Spiel) → Exen
         </p>
       </div>
 
@@ -111,12 +119,12 @@ export default function CircleLobby({ room, playerId }: Props) {
 
       {isHost && (
         <>
-          <button onClick={() => startCircleGame(room)} disabled={room.playerOrder.length < 2}>
+          <button onClick={() => { if (!starting) { setStarting(true); startCircleGame(room).finally(() => setStarting(false)); } }} disabled={room.playerOrder.length < 2 || starting}>
             <Play size={16} strokeWidth={2} /> Spiel starten
           </button>
           {room.playerOrder.length < 2 && (
             <p style={{ textAlign: 'center', fontSize: 13, opacity: 0.6 }}>
-              2+ Spieler nötig (max. 15)
+              2+ Spieler nötig (max. {MAX_PLAYERS})
             </p>
           )}
         </>
@@ -132,26 +140,41 @@ export default function CircleLobby({ room, playerId }: Props) {
 function CardRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean }) {
   const [open, setOpen] = useState(false);
   const [localRules, setLocalRules] = useState<Record<string, string>>(room.cardRules ?? {});
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Pending (not yet saved) edits per card value
+  const pendingRef = useRef<Record<string, string>>({});
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRules = room.cardRules ?? {};
-  const customCount = Object.keys(cardRules).length;
+  const customCount = Object.values(cardRules).filter(r => r.trim()).length;
+  const roomId = room.id;
 
-  // Keep local state in sync when Firestore updates (e.g. from another client)
-  useEffect(() => { setLocalRules(room.cardRules ?? {}); }, [room.cardRules]);
-
-  const handleChange = useCallback((cardValue: string, rule: string) => {
-    const updated = { ...localRules };
-    if (!rule) {
-      delete updated[cardValue];
-    } else {
-      updated[cardValue] = rule;
+  function flush() {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    const pending = pendingRef.current;
+    pendingRef.current = {};
+    for (const [cv, rule] of Object.entries(pending)) {
+      updateCardRule(roomId, cv, rule).catch(() => { /* room may be gone */ });
     }
-    setLocalRules(updated);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      updateCardRules(room, updated);
-    }, 500);
-  }, [localRules, room]);
+  }
+
+  // Take over changes from Firestore, but never overwrite what is being typed right now
+  const rulesKey = JSON.stringify(cardRules);
+  useEffect(() => {
+    setLocalRules(prev => {
+      const next = { ...cardRules };
+      for (const cv of Object.keys(pendingRef.current)) next[cv] = prev[cv] ?? '';
+      return next;
+    });
+  }, [rulesKey]);
+
+  // Save pending edits when leaving the lobby (e.g. game starts)
+  useEffect(() => flush, []);
+
+  function handleChange(cardValue: string, rule: string) {
+    setLocalRules(prev => ({ ...prev, [cardValue]: rule }));
+    pendingRef.current[cardValue] = rule;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(flush, 500);
+  }
 
   return (
     <div style={{
@@ -186,7 +209,7 @@ function CardRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean 
         <div style={{ padding: '0 10px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
           {CARD_VALUES.map(cv => {
             const current = localRules[cv] ?? '';
-            const isModified = !!cardRules[cv];
+            const isModified = !!cardRules[cv]?.trim();
             return (
               <div key={cv} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -205,11 +228,14 @@ function CardRulesSection({ room, isHost }: { room: CircleRoom; isHost: boolean 
                     type="text"
                     value={current}
                     onChange={e => handleChange(cv, e.target.value)}
+                    onBlur={flush}
                     placeholder={CARD_STANDARD_RULES[cv]}
+                    aria-label={`Eigene Regel für ${CARD_DISPLAY[cv]}`}
+                    maxLength={140}
                     style={{
                       flex: 1, background: 'var(--input-bg)',
                       border: '1.5px solid var(--border)', borderRadius: 8,
-                      padding: '4px 8px', fontSize: 12, fontWeight: 600,
+                      padding: '4px 8px', fontSize: 16, fontWeight: 600,
                       color: 'var(--text)', fontFamily: 'inherit',
                       minWidth: 0, outline: 'none', margin: 0,
                       textAlign: 'left',

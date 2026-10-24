@@ -25,6 +25,8 @@ export interface PendingCircleAction {
   sips?: number;
   distribute?: boolean;
   createdGap?: boolean;
+  /** Timestamp when the card was drawn (host may confirm for an absent player after a while). */
+  at?: number;
 }
 
 export interface CircleRoom {
@@ -52,5 +54,9 @@ export interface CircleRoom {
   cardRules: Record<string, string>;
 
   pendingAction: PendingCircleAction | null;
+  /** Index of the player who starts the round (rotates on restart). */
+  startIndex?: number;
+  isLocal?: boolean;
   createdAt: number;
+  expireAt?: unknown;
 }
