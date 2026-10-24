@@ -63,7 +63,7 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
   }
 
   function addLocalPlayer() {
-    if (localPlayers.length >= 6) return;
+    if (localPlayers.length >= 8) return;
     setLocalPlayers(p => [...p, { id: crypto.randomUUID(), name: '' }]);
   }
 
@@ -122,7 +122,7 @@ export default function Home({ onJoined, onBack, initialCode }: Props) {
           </div>
         ))}
 
-        {localPlayers.length < 6 && (
+        {localPlayers.length < 8 && (
           <button className="secondary" onClick={addLocalPlayer} style={{ marginBottom: 8 }}>
             <Plus size={16} strokeWidth={2.5} /> Spieler hinzufügen
           </button>
