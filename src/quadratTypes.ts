@@ -16,6 +16,8 @@ export interface QLastAction {
   correct: boolean;
   card: Card;
   drinkCount: number;
+  /** Comparison card(s) the guess was made against. */
+  compare?: Card[];
 }
 
 export interface QuadratRoom {
@@ -35,5 +37,7 @@ export interface QuadratRoom {
   sipsRemaining: number;
   sipsGiven: Record<string, number>;
   awaitingDrinkConfirm: boolean;
+  isLocal?: boolean;
   createdAt: number;
+  expireAt?: unknown;
 }

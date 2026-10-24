@@ -3,21 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <meta name="theme-color" content="#111111" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Kartenkater" />
   <link rel="icon" type="image/png" href="/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
   <title>Kartenkater</title>
-  <script>
-    (function() {
-      var dark = localStorage.getItem('busfahren_dark') === '1';
-      if (dark) document.body.classList.add('dark');
-      var theme = localStorage.getItem('busfahren_theme');
-      if (theme && theme !== 'lila') document.body.classList.add('theme-' + theme);
-    })();
-  </script>
 </head>
 <body>
+  <script>
+    // Apply theme before first paint (must run inside <body>, document.body is null in <head>)
+    (function() {
+      try {
+        if (localStorage.getItem('busfahren_dark') === '1') document.body.classList.add('dark');
+        var theme = localStorage.getItem('busfahren_theme') || 'mono';
+        if (theme !== 'lila') document.body.classList.add('theme-' + theme);
+      } catch (e) { /* storage blocked */ }
+    })();
+  </script>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

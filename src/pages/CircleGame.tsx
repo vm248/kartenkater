@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Circle, Crown, ThumbsUp } from 'lucide-react';
+import { Circle, Crown, ThumbsUp, ChevronDown, ChevronUp } from 'lucide-react';
 import type { CircleRoom } from '../circleTypes';
 import {
-  drawCard, confirmAction, useDaumen, restartCircleGame,
+  drawCard, confirmAction, useDaumen, restartCircleGame, customRuleFor,
 } from '../circleActions';
 import { haptic } from '../haptic';
 import { cardAngle, polar } from '../circleLogic';
@@ -19,6 +19,9 @@ const CARD_H = 36;
 const SIZE = 280;
 const R = 88; // smaller radius → more natural card overlap
 const CENTER = SIZE / 2;
+// After this long the host may confirm for a player who doesn't react
+const HOST_CONFIRM_AFTER_MS = 20000;
+const CARD_NAMES: Record<string, string> = { B: 'Bube', D: 'Dame', K: 'König', A: 'Ass' };
 
 function suitColor(suit: string): string {
   return suit === '♥' || suit === '♦' ? '#e53e3e' : 'var(--text)';
@@ -33,10 +36,31 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
     ? !!room.daumenKingId && room.daumenKingUses > 0
     : isDaumenKing && room.daumenKingUses > 0;
 
+  const isHost = isLocalMode || room.hostId === playerId;
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [showRules, setShowRules] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  useEffect(() => { setSelectedIdx(null); }, [room.currentPlayerIndex, room.pendingAction]);
+  const pendingKey = room.pendingAction ? `${room.pendingAction.cardIndex}` : null;
+  useEffect(() => { setSelectedIdx(null); }, [room.currentPlayerIndex, pendingKey]);
+
+  // Tick while waiting on someone else's card, so the host fallback button can appear
+  const waitingOnOther = !!room.pendingAction && room.pendingAction.playerId !== playerId && isHost;
+  useEffect(() => {
+    if (!waitingOnOther) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [waitingOnOther]);
+
+  async function run(action: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    try { await action(); } finally { setBusy(false); }
+  }
+
+  const customRuleEntries = Object.entries(room.cardRules ?? {}).filter(([, r]) => r.trim());
 
   function handleSvgClick(e: React.MouseEvent<SVGSVGElement>) {
     if (!isMyTurn || room.pendingAction) return;
@@ -69,8 +93,9 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
 
   async function handleDraw() {
     if (selectedIdx === null) return;
+    const idx = selectedIdx;
     haptic('light');
-    await drawCard(room, selectedIdx, playerId);
+    await run(() => drawCard(room, idx, playerId));
   }
 
   // ---- Pending action overlay ----
@@ -78,18 +103,19 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
     const pa = room.pendingAction;
     const isActor = pa.playerId === playerId;
     const card = pa.card;
-    const customRule = (room.cardRules ?? {})[String(card.value)];
+    const customRule = customRuleFor(room, card.value);
+    const hostMayConfirm = !isActor && isHost && now - (pa.at ?? now) >= HOST_CONFIRM_AFTER_MS;
 
     return (
       <div className="game-area" style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', minHeight: '70vh', gap: 12,
       }}>
-        {/* Persistent Daumenking bar in overlay — hidden when custom rule takes over */}
-        {!customRule && room.daumenKingId && (
-          <DaumenBar room={room} playerId={playerId} canUseDaumen={canUseDaumen} />
+        {/* Active Daumenking / queen rule stay visible – they still apply during this card */}
+        {room.daumenKingId && (
+          <DaumenBar room={room} canUseDaumen={canUseDaumen} />
         )}
-        {!customRule && room.lastQueenName && (
+        {room.lastQueenName && (
           <RuleBar queenName={room.lastQueenName} />
         )}
 
@@ -117,7 +143,8 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
             background: '#e53e3e', color: '#fff', borderRadius: 12,
             padding: '8px 18px', fontWeight: 800, fontSize: 15, textAlign: 'center',
           }}>
-            Lücke gerissen – Exen!
+            Lücke gerissen – {pa.playerName} muss exen!
+            <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.9, marginTop: 2 }}>Zusätzlich gilt die Karte:</div>
           </div>
         )}
 
@@ -137,7 +164,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
             <>
               {pa.type === 'number' && !pa.distribute && (
                 <>
-                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Trink {pa.sips} Schlücke!</p>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Trink {pa.sips} {pa.sips === 1 ? 'Schluck' : 'Schlücke'}!</p>
                   <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Schwarze Karte – selbst trinken</p>
                 </>
               )}
@@ -191,15 +218,20 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
           )}
         </div>
 
-        {isActor && (
-          <button style={{ maxWidth: 280 }} onClick={() => { haptic(pa.createdGap ? 'error' : 'success'); confirmAction(room); }}>
-            {pa.type === 'number' && pa.distribute ? 'Alles verteilt – weiter' : 'Verstanden – weiter'}
+        {(isActor || isLocalMode) && (
+          <button style={{ maxWidth: 280 }} disabled={busy} onClick={() => { haptic(pa.createdGap ? 'error' : 'success'); run(() => confirmAction(room)); }}>
+            {pa.type === 'number' && pa.distribute && !customRule ? 'Alles verteilt – weiter' : 'Verstanden – weiter'}
           </button>
         )}
-        {!isActor && (
+        {!isActor && !isLocalMode && (
           <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
             Warte auf {pa.playerName}…
           </p>
+        )}
+        {hostMayConfirm && !isLocalMode && (
+          <button className="secondary" style={{ maxWidth: 280 }} disabled={busy} onClick={() => run(() => confirmAction(room))}>
+            Für {pa.playerName} weiter
+          </button>
         )}
       </div>
     );
@@ -212,8 +244,8 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
         <Circle size={32} strokeWidth={1.5} style={{ color: 'var(--primary)', marginBottom: 8 }} />
         <h2 style={{ margin: '0 0 8px' }}>Alle Karten gezogen!</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 24px' }}>Das Spiel ist vorbei.</p>
-        {room.hostId === playerId ? (
-          <button onClick={() => restartCircleGame(room)}>Neue Runde</button>
+        {isHost ? (
+          <button disabled={busy} onClick={() => run(() => restartCircleGame(room))}>Neue Runde</button>
         ) : (
           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Warte auf den Host…</p>
         )}
@@ -230,7 +262,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
 
       {/* Persistent Daumenking button – always visible when active */}
       {room.daumenKingId && (
-        <DaumenBar room={room} playerId={playerId} canUseDaumen={canUseDaumen} />
+        <DaumenBar room={room} canUseDaumen={canUseDaumen} />
       )}
 
       {/* Status bar */}
@@ -239,7 +271,9 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
         alignItems: 'center', marginBottom: 8, fontSize: 13,
       }}>
         <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{remaining} Karten übrig</span>
-        <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{room.acesDrawn}/4 Asse</span>
+        {!customRuleFor(room, 'A') && (
+          <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{room.acesDrawn}/4 Asse</span>
+        )}
       </div>
 
       {/* Persistent rule bar */}
@@ -247,10 +281,41 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
         <RuleBar queenName={room.lastQueenName} />
       )}
 
+      {customRuleEntries.length > 0 && (
+        <div style={{ width: '100%', marginBottom: 10 }}>
+          <button
+            className="secondary"
+            onClick={() => setShowRules(r => !r)}
+            style={{ width: '100%', margin: 0, padding: '8px 14px', minHeight: 0, fontSize: 13 }}
+          >
+            Eigene Regeln ({customRuleEntries.length}) {showRules ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {showRules && (
+            <ul className="player-list" style={{ margin: '6px 0 0' }}>
+              {customRuleEntries.map(([cv, rule]) => (
+                <li key={cv} style={{ fontSize: 13 }}>
+                  <strong style={{ minWidth: 48 }}>{CARD_NAMES[cv] ?? cv}</strong>
+                  <span style={{ flex: 1, textAlign: 'right' }}>{rule}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* Turn indicator */}
-      <div style={{ marginBottom: 8, fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
-        {isMyTurn ? 'Du bist dran!' : `${currentPlayerName} ist dran`}
-      </div>
+      {isMyTurn ? (
+        <div className="turn-banner" style={{ width: '100%', padding: '10px 14px' }}>
+          <p className="turn-banner-title" style={{ fontSize: 17 }}>
+            {isLocalMode ? `${currentPlayerName}, du bist dran!` : 'Du bist dran!'}
+          </p>
+          <p className="turn-banner-hint" style={{ margin: 0 }}>Tippe eine Karte im Kreis an und dann auf „Karte ziehen".</p>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 8, fontWeight: 700, fontSize: 14, color: 'var(--primary)' }}>
+          {currentPlayerName} ist dran
+        </div>
+      )}
 
       {/* Circle SVG */}
       <div style={{
@@ -274,11 +339,14 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
             Circle
           </text>
 
-          {/* Cards */}
-          {room.cards.map((card, i) => {
+          {/* Cards – the selected card is rendered last so it lies on top */}
+          {[...room.cards.keys()]
+            .sort((a, b) => (a === selectedIdx ? 1 : 0) - (b === selectedIdx ? 1 : 0))
+            .map(i => {
+            const card = room.cards[i];
             if (!room.cardAngles?.length) return null;
             const angle = cardAngle(i, room.cardAngles);
-            const pos = polar(angle, R);
+            const pos = polar(angle, selectedIdx === i ? R + 6 : R);
             const cx = CENTER + pos.x;
             const cy = CENTER + pos.y;
             const isDrawn = card.drawn;
@@ -288,9 +356,9 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
               <g
                 key={i}
                 transform={`translate(${cx},${cy}) rotate(${angle})`}
-                style={{ cursor: isMyTurn && !isDrawn ? 'pointer' : 'default' }}
+                style={{ cursor: isMyTurn && !isDrawn ? 'pointer' : 'default', pointerEvents: isDrawn ? 'none' : undefined }}
                 onClick={(e) => {
-                  if (!isMyTurn || room.pendingAction) return;
+                  if (isDrawn || !isMyTurn || room.pendingAction) return;
                   e.stopPropagation();
                   setSelectedIdx(prev => prev === i ? null : i);
                 }}
@@ -325,7 +393,7 @@ export default function CircleGame({ room, playerId, isLocalMode }: Props) {
       {/* Selected card confirm */}
       {isMyTurn && selectedIdx !== null && !room.pendingAction && (
         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 360 }}>
-          <button onClick={handleDraw} style={{ maxWidth: 280 }}>Karte ziehen</button>
+          <button onClick={handleDraw} disabled={busy} style={{ maxWidth: 280 }}>Karte ziehen</button>
           <button className="secondary" style={{ maxWidth: 280, marginTop: 6 }}
             onClick={() => setSelectedIdx(null)}>
             Abbrechen
@@ -379,9 +447,8 @@ function RuleBar({ queenName }: { queenName: string }) {
 }
 
 // Daumenking bar – persistent, shown in all game states
-function DaumenBar({ room, playerId, canUseDaumen }: {
+function DaumenBar({ room, canUseDaumen }: {
   room: CircleRoom;
-  playerId: string;
   canUseDaumen: boolean;
 }) {
   const kingId = room.daumenKingId ?? '';

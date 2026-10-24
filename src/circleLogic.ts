@@ -89,9 +89,10 @@ export function checkGap(
   let leftIdx = -1;
   let rightIdx = -1;
 
-  // Find the two immediate angular neighbors (regardless of drawn status)
+  // Find the nearest cards that are still on the table, clockwise and counter-clockwise.
+  // Drawn cards are skipped, so the gap grows as more cards are removed from an area.
   for (let i = 0; i < cards.length; i++) {
-    if (i === removeIdx) continue;
+    if (i === removeIdx || cards[i].drawn) continue;
     const a = angles[i];
     const cw  = (a - myAngle + 360) % 360;
     const ccw = (myAngle - a + 360) % 360;
@@ -99,10 +100,8 @@ export function checkGap(
     if (ccw < leftDelta)  { leftDelta  = ccw; leftIdx  = i; }
   }
 
-  // No neighbors or only one (same card wraps around) → no gap
+  // No neighbors or only one card left → no gap
   if (leftIdx === -1 || rightIdx === -1 || leftIdx === rightIdx) return false;
-  // Gap only fires if both immediate neighbors are still present (not already drawn)
-  if (cards[leftIdx].drawn || cards[rightIdx].drawn) return false;
   return (leftDelta + rightDelta) > GAP_THRESHOLD_DEG;
 }
 

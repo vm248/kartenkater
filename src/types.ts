@@ -43,6 +43,7 @@ export interface ActionResult {
   card: Card;
   step: number;
   message: string;
+  guess?: string;
 }
 
 export interface GameRoom {
@@ -71,5 +72,10 @@ export interface GameRoom {
   lastFailedIndex: number;
   lastAction: ActionResult | null;
   pyramidMatchText: string | null;
+  /** True if the Busfahrer left during phase 3 (game ended without finishing the ride). */
+  busfahrerLeft?: boolean;
+  /** Local mode: all players share one device. */
+  isLocal?: boolean;
   createdAt: number;
+  expireAt?: unknown;
 }

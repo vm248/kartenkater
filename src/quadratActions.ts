@@ -1,26 +1,22 @@
-import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, deleteField, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Player } from './types';
 import type { QuadratRoom, QCell } from './quadratTypes';
 import {
   createQuadratDeck, createInitialGrid, evaluateQuadratGuess,
-  CELL_TYPES, ensureDeck, connectedRevealedCells,
+  CELL_TYPES, ensureDeck, connectedRevealedCells, isAvailable, comparisonPositions,
 } from './quadratLogic';
 import { getPlayerId } from './gameActions';
+import { createRoomDoc, updateRoomTx, roomExpiry, joinRoomTx, indexAfterRemoval } from './roomUtils';
 
-function genCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
-}
+const COL = 'quadrat';
 
 async function cleanupOldQuadratRooms(): Promise<void> {
   try {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     const [oldSnap, emptySnap] = await Promise.all([
-      getDocs(query(collection(db, 'quadrat'), where('createdAt', '<', cutoff))),
-      getDocs(query(collection(db, 'quadrat'), where('playerOrder', '==', []))),
+      getDocs(query(collection(db, COL), where('createdAt', '<', cutoff))),
+      getDocs(query(collection(db, COL), where('playerOrder', '==', []))),
     ]);
     const refs = new Map([...oldSnap.docs, ...emptySnap.docs].map(d => [d.id, d.ref]));
     await Promise.all([...refs.values()].map(ref => deleteDoc(ref)));
@@ -29,17 +25,13 @@ async function cleanupOldQuadratRooms(): Promise<void> {
   }
 }
 
-export async function createQuadratRoom(playerId: string, playerName: string): Promise<string> {
-  cleanupOldQuadratRooms();
-  const code = genCode();
-  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
-
-  const room: QuadratRoom = {
+function newRoom(code: string, hostId: string, players: Record<string, Player>, playerOrder: string[], isLocal: boolean): QuadratRoom {
+  return {
     id: code,
     status: 'lobby',
-    hostId: playerId,
-    players: { [playerId]: player },
-    playerOrder: [playerId],
+    hostId,
+    players,
+    playerOrder,
     grid: [],
     deck: [],
     discard: [],
@@ -51,33 +43,27 @@ export async function createQuadratRoom(playerId: string, playerName: string): P
     sipsRemaining: 0,
     sipsGiven: {},
     awaitingDrinkConfirm: false,
+    isLocal,
     createdAt: Date.now(),
+    expireAt: roomExpiry(),
   };
+}
 
-  await setDoc(doc(db, 'quadrat', code), room);
-  return code;
+export async function createQuadratRoom(playerId: string, playerName: string): Promise<string> {
+  cleanupOldQuadratRooms();
+  const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
+  return createRoomDoc(COL, code => newRoom(code, playerId, { [playerId]: player }, [playerId], false));
 }
 
 export async function createLocalQuadratRoom(players: { id: string; name: string }[]): Promise<string> {
   cleanupOldQuadratRooms();
-  const code = genCode();
   const playerMap: Record<string, Player> = {};
   const playerOrder: string[] = [];
   for (const p of players) {
     playerMap[p.id] = { id: p.id, name: p.name, hand: [], joinedAt: Date.now() };
     playerOrder.push(p.id);
   }
-  const room: QuadratRoom = {
-    id: code, status: 'lobby', hostId: players[0].id,
-    players: playerMap, playerOrder,
-    grid: [], deck: [], discard: [],
-    currentPlayerIndex: 0, streak: 0,
-    lastAction: null, winnerId: null, winnerName: null,
-    sipsRemaining: 0, sipsGiven: {}, awaitingDrinkConfirm: false,
-    createdAt: Date.now(),
-  };
-  await setDoc(doc(db, 'quadrat', code), room);
-  return code;
+  return createRoomDoc(COL, code => newRoom(code, players[0].id, playerMap, playerOrder, true));
 }
 
 export async function joinQuadratRoom(
@@ -85,46 +71,33 @@ export async function joinQuadratRoom(
   playerId: string,
   playerName: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const ref = doc(db, 'quadrat', roomId.toUpperCase());
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return { ok: false, error: 'Raum nicht gefunden.' };
-  const room = snap.data() as QuadratRoom;
-  if (room.players[playerId]) return { ok: true };
-  if (room.status !== 'lobby') return { ok: false, error: 'Spiel läuft bereits.' };
-  if (room.playerOrder.length >= 15) return { ok: false, error: 'Raum ist voll (max. 15 Spieler).' };
-
   const player: Player = { id: playerId, name: playerName, hand: [], joinedAt: Date.now() };
-  const insertAt = Math.floor(Math.random() * (room.playerOrder.length + 1));
-  const newOrder = [...room.playerOrder];
-  newOrder.splice(insertAt, 0, playerId);
-
-  await updateDoc(ref, {
-    [`players.${playerId}`]: player,
-    playerOrder: newOrder,
-  });
-  return { ok: true };
+  return joinRoomTx(COL, roomId, player, true);
 }
 
-export async function kickQuadratPlayer(room: QuadratRoom, targetId: string): Promise<void> {
-  const newOrder = room.playerOrder.filter(id => id !== targetId);
-  const newPlayers = { ...room.players };
-  delete newPlayers[targetId];
-  await updateDoc(doc(db, 'quadrat', room.id), {
-    playerOrder: newOrder,
-    players: newPlayers,
-  });
-}
-
-export async function leaveQuadratRoom(room: QuadratRoom, playerId: string): Promise<void> {
-  const newOrder = room.playerOrder.filter(id => id !== playerId);
-  if (newOrder.length === 0) {
-    await deleteDoc(doc(db, 'quadrat', room.id));
-    return;
+/** Replaces the wrong card and every revealed card connected to it. */
+function replaceConnected(room: QuadratRoom, cellIndex: number) {
+  const grid: QCell[] = room.grid.map(c => ({ ...c }));
+  const toRemove = connectedRevealedCells(cellIndex, grid);
+  const { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
+  for (const pos of toRemove) {
+    discard.push(grid[pos].card!);
+    const replacement = deck.pop()!;
+    const type = CELL_TYPES[pos];
+    grid[pos] = { index: pos, type, card: replacement, revealed: type === 'C' };
   }
+  return { grid, deck, discard };
+}
 
-  const newPlayers = { ...room.players };
-  delete newPlayers[playerId];
-  const update: Record<string, unknown> = { playerOrder: newOrder, players: newPlayers };
+function removalUpdate(room: QuadratRoom, playerId: string): Record<string, unknown> | 'delete' | null {
+  if (!room.playerOrder.includes(playerId)) return null;
+  const newOrder = room.playerOrder.filter(id => id !== playerId);
+  if (newOrder.length === 0) return 'delete';
+
+  const update: Record<string, unknown> = {
+    playerOrder: newOrder,
+    [`players.${playerId}`]: deleteField(),
+  };
 
   if (room.hostId === playerId) {
     update.hostId = newOrder[Math.floor(Math.random() * newOrder.length)];
@@ -132,26 +105,17 @@ export async function leaveQuadratRoom(room: QuadratRoom, playerId: string): Pro
 
   if (room.status === 'playing') {
     const idx = room.playerOrder.indexOf(playerId);
-    let ci = room.currentPlayerIndex;
-    if (idx < ci) ci--;
-    else if (idx === ci) ci = ci % newOrder.length;
-    update.currentPlayerIndex = ci;
+    update.currentPlayerIndex = indexAfterRemoval(room.currentPlayerIndex, idx, newOrder.length);
 
-    // If the leaving player was the wrong-guesser waiting to confirm, clean up the revealed card
-    if (room.awaitingDrinkConfirm && idx === room.currentPlayerIndex && room.lastAction) {
-      const gridCopy: QCell[] = room.grid.map(c => ({ ...c }));
-      const toRemove = connectedRevealedCells(room.lastAction.cellIndex, gridCopy);
-      let { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
-      for (const pos of toRemove) {
-        discard.push(gridCopy[pos].card!);
-        const replacement = deck.pop()!;
-        const type = CELL_TYPES[pos];
-        gridCopy[pos] = { index: pos, type, card: replacement, revealed: type === 'C' };
+    if (idx === room.currentPlayerIndex) {
+      // The next player starts fresh: no inherited streak or feedback
+      update.streak = 0;
+      update.lastAction = null;
+      // If the leaving player was the wrong-guesser waiting to confirm, clean up the revealed card
+      if (room.awaitingDrinkConfirm && room.lastAction) {
+        Object.assign(update, replaceConnected(room, room.lastAction.cellIndex));
+        update.awaitingDrinkConfirm = false;
       }
-      update.grid = gridCopy;
-      update.deck = deck;
-      update.discard = discard;
-      update.awaitingDrinkConfirm = false;
     }
   }
 
@@ -159,20 +123,35 @@ export async function leaveQuadratRoom(room: QuadratRoom, playerId: string): Pro
     update.status = 'finished';
   }
 
-  await updateDoc(doc(db, 'quadrat', room.id), update);
+  return update;
+}
+
+export async function kickQuadratPlayer(room: QuadratRoom, targetId: string): Promise<void> {
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => removalUpdate(cur, targetId));
+}
+
+export async function leaveQuadratRoom(room: QuadratRoom, playerId: string): Promise<void> {
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => removalUpdate(cur, playerId));
+}
+
+export async function deleteLocalQuadratRoom(roomId: string): Promise<void> {
+  await deleteDoc(doc(db, COL, roomId));
 }
 
 export async function startQuadratGame(room: QuadratRoom): Promise<void> {
-  const deck = createQuadratDeck();
-  const { grid, remaining } = createInitialGrid(deck);
-  await updateDoc(doc(db, 'quadrat', room.id), {
-    status: 'playing',
-    grid,
-    deck: remaining,
-    discard: [],
-    currentPlayerIndex: 0,
-    streak: 0,
-    lastAction: null,
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => {
+    if (cur.status !== 'lobby' || cur.playerOrder.length < 2) return null;
+    const { grid, remaining } = createInitialGrid(createQuadratDeck());
+    return {
+      status: 'playing',
+      grid,
+      deck: remaining,
+      discard: [],
+      currentPlayerIndex: 0,
+      streak: 0,
+      lastAction: null,
+      sipsGiven: {},
+    };
   });
 }
 
@@ -182,95 +161,98 @@ export async function makeQuadratGuess(
   guess: string,
   playerId: string,
 ): Promise<void> {
-  const grid: QCell[] = room.grid.map(c => ({ ...c }));
-  const card = grid[cellIndex].card!;
-  const playerName = room.players[playerId].name;
-  const correct = evaluateQuadratGuess(guess, cellIndex, grid);
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => {
+    // Guard against double taps and stale screens
+    if (cur.status !== 'playing' || cur.awaitingDrinkConfirm) return null;
+    if (cur.playerOrder[cur.currentPlayerIndex] !== playerId) return null;
+    if (!isAvailable(cellIndex, cur.grid)) return null;
 
-  if (correct) {
+    const grid: QCell[] = cur.grid.map(c => ({ ...c }));
+    const card = grid[cellIndex].card!;
+    const playerName = cur.players[playerId].name;
+    const compare = comparisonPositions(cellIndex).map(p => grid[p].card!);
+    const correct = evaluateQuadratGuess(guess, cellIndex, grid);
+
+    // Reveal the card in both cases so everyone sees it
     grid[cellIndex] = { ...grid[cellIndex], revealed: true };
-    const newStreak = room.streak + 1;
-    const allDone = grid.filter(c => c.type !== null).every(c => c.revealed);
 
-    if (allDone) {
-      await updateDoc(doc(db, 'quadrat', room.id), {
-        grid, streak: 0,
-        status: 'distributing',
-        winnerId: playerId,
-        winnerName: playerName,
-        sipsRemaining: 10,
-        lastAction: { playerName, cellIndex, guess, correct: true, card, drinkCount: 0 },
-      });
-    } else {
-      await updateDoc(doc(db, 'quadrat', room.id), {
-        grid, streak: newStreak,
-        lastAction: { playerName, cellIndex, guess, correct: true, card, drinkCount: 0 },
-      });
+    if (correct) {
+      const allDone = grid.filter(c => c.type !== null).every(c => c.revealed);
+      const lastAction = { playerName, cellIndex, guess, correct: true, card, drinkCount: 0, compare };
+      if (allDone) {
+        return {
+          grid, streak: 0,
+          status: 'distributing',
+          winnerId: playerId,
+          winnerName: playerName,
+          sipsRemaining: 10,
+          sipsGiven: {},
+          lastAction,
+        };
+      }
+      return { grid, streak: cur.streak + 1, lastAction };
     }
-  } else {
-    // Reveal wrong card so everyone can see it, but don't replace yet
-    grid[cellIndex] = { ...grid[cellIndex], revealed: true };
+
+    // Wrong: show the card, replacement happens on confirm
     const drinkCount = connectedRevealedCells(cellIndex, grid).length;
-    await updateDoc(doc(db, 'quadrat', room.id), {
+    return {
       grid, streak: 0, awaitingDrinkConfirm: true,
-      lastAction: { playerName, cellIndex, guess, correct: false, card, drinkCount },
-    });
-  }
+      lastAction: { playerName, cellIndex, guess, correct: false, card, drinkCount, compare },
+    };
+  });
 }
 
 export async function confirmQuadratDrink(room: QuadratRoom): Promise<void> {
-  if (!room.lastAction) return;
-  const grid: QCell[] = room.grid.map(c => ({ ...c }));
-  const toRemove = connectedRevealedCells(room.lastAction.cellIndex, grid);
-
-  let { deck, discard } = ensureDeck([...room.deck], [...room.discard], toRemove.length);
-  for (const pos of toRemove) {
-    discard.push(grid[pos].card!);
-    const replacement = deck.pop()!;
-    const type = CELL_TYPES[pos];
-    grid[pos] = { index: pos, type, card: replacement, revealed: type === 'C' };
-  }
-
-  const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
-  await updateDoc(doc(db, 'quadrat', room.id), {
-    grid, deck, discard,
-    currentPlayerIndex: nextIndex,
-    awaitingDrinkConfirm: false,
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => {
+    if (cur.status !== 'playing' || !cur.awaitingDrinkConfirm || !cur.lastAction) return null;
+    return {
+      ...replaceConnected(cur, cur.lastAction.cellIndex),
+      currentPlayerIndex: (cur.currentPlayerIndex + 1) % cur.playerOrder.length,
+      awaitingDrinkConfirm: false,
+    };
   });
 }
 
 export async function giveSip(room: QuadratRoom, targetId: string): Promise<void> {
-  if (room.sipsRemaining <= 0) return;
-  const current = room.sipsGiven?.[targetId] ?? 0;
-  await updateDoc(doc(db, 'quadrat', room.id), {
-    [`sipsGiven.${targetId}`]: current + 1,
-    sipsRemaining: room.sipsRemaining - 1,
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => {
+    if (cur.status !== 'distributing' || cur.sipsRemaining <= 0) return null;
+    return {
+      [`sipsGiven.${targetId}`]: (cur.sipsGiven?.[targetId] ?? 0) + 1,
+      sipsRemaining: cur.sipsRemaining - 1,
+    };
   });
 }
 
 export async function finishSipDistribution(room: QuadratRoom): Promise<void> {
-  await updateDoc(doc(db, 'quadrat', room.id), { status: 'finished' });
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur =>
+    cur.status === 'distributing' ? { status: 'finished' } : null);
 }
 
 export async function restartQuadratGame(room: QuadratRoom): Promise<void> {
-  await updateDoc(doc(db, 'quadrat', room.id), {
-    status: 'lobby',
-    grid: [], deck: [], discard: [],
-    streak: 0, currentPlayerIndex: 0,
-    lastAction: null,
-    winnerId: null, winnerName: null,
-    sipsRemaining: 0, sipsGiven: {},
-    awaitingDrinkConfirm: false,
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => {
+    if (cur.status === 'lobby') return null;
+    return {
+      status: 'lobby',
+      grid: [], deck: [], discard: [],
+      streak: 0, currentPlayerIndex: 0,
+      lastAction: null,
+      winnerId: null, winnerName: null,
+      sipsRemaining: 0, sipsGiven: {},
+      awaitingDrinkConfirm: false,
+      expireAt: roomExpiry(),
+    };
   });
 }
 
 export async function passQuadratTurn(room: QuadratRoom): Promise<void> {
-  if (room.awaitingDrinkConfirm) return;
-  const nextIndex = (room.currentPlayerIndex + 1) % room.playerOrder.length;
-  await updateDoc(doc(db, 'quadrat', room.id), {
-    currentPlayerIndex: nextIndex,
-    streak: 0,
-    lastAction: null,
+  await updateRoomTx<QuadratRoom>(COL, room.id, cur => {
+    if (cur.status !== 'playing' || cur.awaitingDrinkConfirm) return null;
+    if (cur.currentPlayerIndex !== room.currentPlayerIndex) return null;
+    return {
+      currentPlayerIndex: (cur.currentPlayerIndex + 1) % cur.playerOrder.length,
+      streak: 0,
+      lastAction: null,
+    };
   });
 }
 

@@ -22,7 +22,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     this.setState({ reporting: true });
     try {
       await submitErrorReport({
-        message: `[Auto] ${this.state.error.message}\n${this.state.error.stack ?? ''}`,
+        message: `[Auto] ${this.state.error.message}\n${this.state.error.stack ?? ''}`.slice(0, 2000),
         playerId: getPlayerId(),
       });
       this.setState({ reported: true });

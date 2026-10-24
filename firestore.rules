@@ -6,27 +6,21 @@ service cloud.firestore {
       allow read: if true;
       allow create: if validNewRoom();
       allow update: if validRoomUpdate();
-      allow delete: if request.auth != null
-                    || resource.data.playerOrder.size() <= 1
-                    || request.time.toMillis() > resource.data.createdAt + 86400000;
+      allow delete: if canDeleteRoom();
     }
 
     match /quadrat/{roomId} {
       allow read: if true;
       allow create: if validNewQuadrat();
       allow update: if validQuadratUpdate();
-      allow delete: if request.auth != null
-                    || resource.data.playerOrder.size() <= 1
-                    || request.time.toMillis() > resource.data.createdAt + 86400000;
+      allow delete: if canDeleteRoom();
     }
 
     match /circle/{roomId} {
       allow read: if true;
       allow create: if validNewCircle();
       allow update: if validCircleUpdate();
-      allow delete: if request.auth != null
-                    || resource.data.playerOrder.size() <= 1
-                    || request.time.toMillis() > resource.data.createdAt + 86400000;
+      allow delete: if canDeleteRoom();
     }
 
     match /errors/{errorId} {
@@ -34,7 +28,21 @@ service cloud.firestore {
                     && request.resource.data.message.size() > 0
                     && request.resource.data.message.size() <= 2000
                     && request.resource.data.timestamp is number;
-      allow read, delete: if request.auth != null;
+      allow read, delete: if isAdmin();
+    }
+
+    // Only the developer account may use the dashboard (read errors, delete anything).
+    // Replace the UID below with the one shown in the dashboard header (Firebase Console → Authentication → Users).
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'HIER_DEINE_FIREBASE_UID_EINTRAGEN';
+    }
+
+    // Admin, last player leaving, local rooms (whole table leaves together) or rooms older than 24h
+    function canDeleteRoom() {
+      return isAdmin()
+        || resource.data.playerOrder.size() <= 1
+        || resource.data.get('isLocal', false) == true
+        || request.time.toMillis() > resource.data.createdAt + 86400000;
     }
 
     function validNewRoom() {
@@ -47,7 +55,7 @@ service cloud.firestore {
         && d.players is map
         && d.playerOrder is list
         && d.playerOrder.size() >= 1
-        && d.playerOrder.size() <= 12;
+        && d.playerOrder.size() <= 15;
     }
 
     function validRoomUpdate() {
@@ -56,7 +64,7 @@ service cloud.firestore {
       return d.createdAt == old.createdAt
         && d.id == old.id
         && d.playerOrder is list
-        && d.playerOrder.size() <= 12
+        && d.playerOrder.size() <= 15
         && validBusfahrenStatus(d.status);
     }
 
@@ -75,7 +83,7 @@ service cloud.firestore {
         && d.players is map
         && d.playerOrder is list
         && d.playerOrder.size() >= 1
-        && d.playerOrder.size() <= 12;
+        && d.playerOrder.size() <= 15;
     }
 
     function validQuadratUpdate() {
@@ -84,7 +92,7 @@ service cloud.firestore {
       return d.createdAt == old.createdAt
         && d.id == old.id
         && d.playerOrder is list
-        && d.playerOrder.size() <= 12
+        && d.playerOrder.size() <= 15
         && validQuadratStatus(d.status);
     }
 
@@ -102,7 +110,7 @@ service cloud.firestore {
         && d.players is map
         && d.playerOrder is list
         && d.playerOrder.size() >= 1
-        && d.playerOrder.size() <= 12;
+        && d.playerOrder.size() <= 15;
     }
 
     function validCircleUpdate() {
@@ -111,7 +119,7 @@ service cloud.firestore {
       return d.createdAt == old.createdAt
         && d.id == old.id
         && d.playerOrder is list
-        && d.playerOrder.size() <= 12
+        && d.playerOrder.size() <= 15
         && validCircleStatus(d.status);
     }
 

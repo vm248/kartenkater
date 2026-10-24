@@ -1,16 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
 import { db } from './firebase';
 import type { GameRoom } from './types';
 import type { QuadratRoom } from './quadratTypes';
 import type { CircleRoom } from './circleTypes';
-import { getPlayerId, leaveRoom, joinRoom } from './gameActions';
-import { leaveQuadratRoom, joinQuadratRoom } from './quadratActions';
-import { leaveCircleRoom, joinCircleRoom } from './circleActions';
-import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send, Bell, BellOff } from 'lucide-react';
+import { getPlayerId, leaveRoom, joinRoom, deleteLocalRoom } from './gameActions';
+import { leaveQuadratRoom, joinQuadratRoom, deleteLocalQuadratRoom } from './quadratActions';
+import { leaveCircleRoom, joinCircleRoom, deleteLocalCircleRoom } from './circleActions';
+import { Sun, Moon, Home as HomeIcon, WifiOff, Copy, Check, Info, X, AlertTriangle, Send, Bell, BellOff, RefreshCw } from 'lucide-react';
 import { submitErrorReport } from './errorActions';
 import ErrorBoundary from './components/ErrorBoundary';
-import DevDashboard from './pages/DevDashboard';
 import GameSelection from './pages/GameSelection';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
@@ -22,6 +21,9 @@ import CircleHome from './pages/CircleHome';
 import CircleLobby from './pages/CircleLobby';
 import CircleGame from './pages/CircleGame';
 
+// Dashboard (and firebase/auth) is only loaded under /?dashboard
+const DevDashboard = lazy(() => import('./pages/DevDashboard'));
+
 const THEMES = [
   { id: 'mono',   label: 'Mono',  colors: ['#111111', '#E8E8E8'] as [string, string] },
   { id: 'lila',   label: 'Lila',  colors: ['#7C3AED', '#EC4899'] as [string, string] },
@@ -32,28 +34,76 @@ const THEMES = [
 type ThemeId = 'mono' | 'lila' | 'ocean' | 'forest' | 'fire';
 
 const isDev = new URLSearchParams(window.location.search).has('dashboard');
+const ERROR_MAX_LENGTH = 2000;
+
+// Local mode (one device for everyone) survives reloads / iOS tab eviction
+const LOCAL_KEY = 'kartenkater_local';
+type LocalState = { roomId: string; ids: string[]; activeId: string };
+function loadLocalState(): LocalState | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    if (!raw) return null;
+    const st = JSON.parse(raw) as LocalState;
+    const rooms = ['busfahren_room', 'quadrat_room', 'circle_room'].map(k => localStorage.getItem(k));
+    return rooms.includes(st.roomId) && Array.isArray(st.ids) && st.ids.length > 1 ? st : null;
+  } catch {
+    return null;
+  }
+}
+const initialLocal = isDev ? null : loadLocalState();
+
+function storedRoom(key: string): string | null {
+  return isDev ? null : localStorage.getItem(key);
+}
+
+/** Shows "Du bist dran" as a system notification. Never throws (iOS Safari has no Notification API outside the PWA). */
+function notifyTurn() {
+  try {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const title = 'Kartenkater';
+    const options = { body: 'Du bist dran!', icon: '/icon-192.png', tag: 'kartenkater-turn' };
+    const fallback = () => { try { new Notification(title, options); } catch { /* not supported */ } };
+    if ('serviceWorker' in navigator) {
+      // Android Chrome only allows notifications via the service worker
+      navigator.serviceWorker.getRegistration()
+        .then(reg => (reg ? reg.showNotification(title, options) : fallback()))
+        .catch(fallback);
+    } else {
+      fallback();
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export default function App() {
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
-  const [initialCode, setInitialCode] = useState<string | null>(null);
 
   const [roomId, setRoomId] = useState<string | null>(
-    () => localStorage.getItem('busfahren_room')
+    () => storedRoom('busfahren_room')
   );
   const [room, setRoom] = useState<GameRoom | null>(null);
 
   const [quadratRoomId, setQuadratRoomId] = useState<string | null>(
-    () => localStorage.getItem('quadrat_room')
+    () => storedRoom('quadrat_room')
   );
   const [quadratRoom, setQuadratRoom] = useState<QuadratRoom | null>(null);
 
   const [circleRoomId, setCircleRoomId] = useState<string | null>(
-    () => localStorage.getItem('circle_room')
+    () => storedRoom('circle_room')
   );
   const [circleRoom, setCircleRoom] = useState<CircleRoom | null>(null);
 
-  const [localPlayerIds, setLocalPlayerIds] = useState<string[]>([]);
-  const [localActiveId, setLocalActiveId] = useState<string>(getPlayerId);
+  const [localPlayerIds, setLocalPlayerIds] = useState<string[]>(() => initialLocal?.ids ?? []);
+  const [localActiveId, setLocalActiveId] = useState<string>(() => initialLocal?.activeId ?? getPlayerId());
+  const localIdsRef = useRef(localPlayerIds);
+  localIdsRef.current = localPlayerIds;
+
+  // Firestore sync state: re-subscribe counter and "showing cached data" flag
+  const [syncNonce, setSyncNonce] = useState(0);
+  const [fromCache, setFromCache] = useState(false);
+  const [showSyncBanner, setShowSyncBanner] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   const [dark, setDark] = useState(
     () => localStorage.getItem('busfahren_dark') === '1'
@@ -114,6 +164,58 @@ export default function App() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
+  // iOS freezes background tabs and silently drops the Firestore stream.
+  // When the app comes back (after being hidden for a while) force a fresh connection.
+  useEffect(() => {
+    let hiddenAt = document.visibilityState === 'hidden' ? Date.now() : 0;
+    let reconnecting = false;
+    async function reconnect() {
+      if (reconnecting) return;
+      reconnecting = true;
+      try {
+        await disableNetwork(db);
+        await enableNetwork(db);
+      } catch {
+        // ignore – the SDK keeps retrying on its own
+      } finally {
+        reconnecting = false;
+      }
+    }
+    function onVisibility() {
+      if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 5000) reconnect();
+      hiddenAt = 0;
+    }
+    function onPageShow(e: PageTransitionEvent) { if (e.persisted) reconnect(); }
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', reconnect);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', reconnect);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
+
+  // Only show the sync banner if cached data persists for a moment
+  useEffect(() => {
+    if (!fromCache) { setShowSyncBanner(false); return; }
+    const t = setTimeout(() => setShowSyncBanner(true), 3000);
+    return () => clearTimeout(t);
+  }, [fromCache]);
+
+  // Persist local mode
+  useEffect(() => {
+    const currentRoom = roomId ?? quadratRoomId ?? circleRoomId;
+    try {
+      if (localPlayerIds.length > 1 && currentRoom) {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify({ roomId: currentRoom, ids: localPlayerIds, activeId: localActiveId }));
+      } else {
+        localStorage.removeItem(LOCAL_KEY);
+      }
+    } catch { /* storage unavailable */ }
+  }, [localPlayerIds, localActiveId, roomId, quadratRoomId, circleRoomId]);
+
   // Dark mode
   useEffect(() => {
     document.body.classList.toggle('dark', dark);
@@ -146,47 +248,78 @@ export default function App() {
   useEffect(() => {
     if (!roomId) return;
     localStorage.setItem('busfahren_room', roomId);
-    const unsub = onSnapshot(doc(db, 'rooms', roomId), snap => {
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const unsub = onSnapshot(doc(db, 'rooms', roomId), { includeMetadataChanges: true }, snap => {
+      const cached = snap.metadata.fromCache;
+      setFromCache(cached);
       if (snap.exists()) {
         const data = snap.data() as GameRoom;
-        if (!data.playerOrder.includes(playerId)) { handleLeave(); return; }
+        // Only trust server data for "you're no longer in this room"
+        if (!cached && !isMember(data.playerOrder)) { handleLeave(); return; }
         setRoom(data);
-      } else {
+      } else if (!cached) {
         handleLeave();
       }
+    }, err => {
+      // Listener died (e.g. network / quota) → show it and subscribe again
+      console.warn('Firestore listener error', err);
+      setFromCache(true);
+      retry = setTimeout(() => setSyncNonce(n => n + 1), 2000);
     });
-    return unsub;
-  }, [roomId]);
+    return () => { unsub(); if (retry) clearTimeout(retry); };
+  }, [roomId, syncNonce]);
 
   useEffect(() => {
     if (!quadratRoomId) return;
     localStorage.setItem('quadrat_room', quadratRoomId);
-    const unsub = onSnapshot(doc(db, 'quadrat', quadratRoomId), snap => {
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const unsub = onSnapshot(doc(db, 'quadrat', quadratRoomId), { includeMetadataChanges: true }, snap => {
+      const cached = snap.metadata.fromCache;
+      setFromCache(cached);
       if (snap.exists()) {
         const data = snap.data() as QuadratRoom;
-        if (!data.playerOrder.includes(playerId)) { handleLeave(); return; }
+        // Only trust server data for "you're no longer in this room"
+        if (!cached && !isMember(data.playerOrder)) { handleLeave(); return; }
         setQuadratRoom(data);
-      } else {
+      } else if (!cached) {
         handleLeave();
       }
+    }, err => {
+      // Listener died (e.g. network / quota) → show it and subscribe again
+      console.warn('Firestore listener error', err);
+      setFromCache(true);
+      retry = setTimeout(() => setSyncNonce(n => n + 1), 2000);
     });
-    return unsub;
-  }, [quadratRoomId]);
+    return () => { unsub(); if (retry) clearTimeout(retry); };
+  }, [quadratRoomId, syncNonce]);
 
   useEffect(() => {
     if (!circleRoomId) return;
     localStorage.setItem('circle_room', circleRoomId);
-    const unsub = onSnapshot(doc(db, 'circle', circleRoomId), snap => {
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const unsub = onSnapshot(doc(db, 'circle', circleRoomId), { includeMetadataChanges: true }, snap => {
+      const cached = snap.metadata.fromCache;
+      setFromCache(cached);
       if (snap.exists()) {
         const data = snap.data() as CircleRoom;
-        if (!data.playerOrder.includes(playerId)) { handleLeave(); return; }
+        // Only trust server data for "you're no longer in this room"
+        if (!cached && !isMember(data.playerOrder)) { handleLeave(); return; }
         setCircleRoom(data);
-      } else {
+      } else if (!cached) {
         handleLeave();
       }
+    }, err => {
+      // Listener died (e.g. network / quota) → show it and subscribe again
+      console.warn('Firestore listener error', err);
+      setFromCache(true);
+      retry = setTimeout(() => setSyncNonce(n => n + 1), 2000);
     });
-    return unsub;
-  }, [circleRoomId]);
+    return () => { unsub(); if (retry) clearTimeout(retry); };
+  }, [circleRoomId, syncNonce]);
+
+  function isMember(order: string[]): boolean {
+    return order.includes(playerId) || localIdsRef.current.some(id => order.includes(id));
+  }
 
   function clearAllRooms() {
     localStorage.removeItem('busfahren_room');
@@ -197,9 +330,11 @@ export default function App() {
     setCircleRoomId(null); setCircleRoom(null);
   }
   function requestNotificationPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Promise.resolve(Notification.requestPermission()).catch(() => {});
+      }
+    } catch { /* not supported */ }
   }
 
   function handleJoined(id: string, localIds?: string[]) {
@@ -236,13 +371,35 @@ export default function App() {
     clearAllRooms();
     setLocalPlayerIds([]);
     setLocalActiveId(playerId);
+    setPhase1HandoffReady(false);
+    setConfirmLeave(false);
+    setFromCache(false);
     setSelectedGame(null);
   }
-  async function handleUserLeave() {
-    if (room) await leaveRoom(room, playerId);
-    if (quadratRoom) await leaveQuadratRoom(quadratRoom, playerId);
-    if (circleRoom) await leaveCircleRoom(circleRoom, playerId);
+  function handleUserLeave() {
+    const local = localPlayerIds.length > 1;
+    const r = room, q = quadratRoom, c = circleRoom;
+    // Leave the UI immediately; the server write must not block (offline / errors)
     handleLeave();
+    const ignore = () => {};
+    if (local) {
+      // The whole table leaves together → remove the room (fall back to leaving)
+      if (r) deleteLocalRoom(r.id).catch(() => leaveRoom(r, playerId).catch(ignore));
+      if (q) deleteLocalQuadratRoom(q.id).catch(() => leaveQuadratRoom(q, playerId).catch(ignore));
+      if (c) deleteLocalCircleRoom(c.id).catch(() => leaveCircleRoom(c, playerId).catch(ignore));
+      return;
+    }
+    if (r) leaveRoom(r, playerId).catch(ignore);
+    if (q) leaveQuadratRoom(q, playerId).catch(ignore);
+    if (c) leaveCircleRoom(c, playerId).catch(ignore);
+  }
+  function handleHomeClick() {
+    const running = (room && room.status !== 'lobby' && room.status !== 'finished')
+      || (quadratRoom && quadratRoom.status !== 'lobby' && quadratRoom.status !== 'finished')
+      || (circleRoom && circleRoom.status !== 'lobby' && circleRoom.status !== 'finished');
+    if (running) setConfirmLeave(true);
+    else if (inRoom) handleUserLeave();
+    else setSelectedGame(null);
   }
 
   const inRoom = roomId || quadratRoomId || circleRoomId;
@@ -273,13 +430,13 @@ export default function App() {
   }
 
   async function handleSubmitError() {
-if (!errorText.trim() || errorSubmitting) return;
+    if (!errorText.trim() || errorSubmitting) return;
     setErrorSubmitting(true);
     setErrorSendFailed(false);
     try {
       const gameType = roomId ? 'busfahren' : quadratRoomId ? 'quadrat' : circleRoomId ? 'circle' : undefined;
       const currentRoomId = roomId ?? quadratRoomId ?? circleRoomId ?? undefined;
-      await submitErrorReport({ message: errorText.trim(), playerId, gameType, roomId: currentRoomId });
+      await submitErrorReport({ message: errorText.trim().slice(0, ERROR_MAX_LENGTH), playerId, gameType, roomId: currentRoomId });
       setErrorSubmitted(true);
     } catch {
       setErrorSendFailed(true);
@@ -315,15 +472,20 @@ if (!errorText.trim() || errorSubmitting) return;
   }
 
   function handlePopupCopy() {
-    navigator.clipboard.writeText(popupCode).then(() => {
+    navigator.clipboard?.writeText(popupCode).then(() => {
       setPopupCopied(true);
       setTimeout(() => setPopupCopied(false), 2000);
-    });
+    }).catch(() => { /* clipboard blocked – code is visible anyway */ });
   }
 
   const isLocalMode = localPlayerIds.length > 1;
+  // Busfahren Stechen: next candidate on this device who still has to pick a card
+  const tiebreakNext = room?.status === 'results' && room.tiebreakOffered && room.tiebreakCandidates
+    ? room.tiebreakCandidates.find(id => !room.tiebreakPicks?.[id]) ?? null
+    : null;
   const effectivePlayerId = isLocalMode
     ? room?.status === 'phase1'      ? localActiveId
+    : room?.status === 'results'     ? (tiebreakNext ?? localPlayerIds[0])
     : room?.status === 'phase3'      ? (room.busfahrerId ?? localPlayerIds[0])
     : quadratRoom?.status === 'playing'      ? localActiveId
     : quadratRoom?.status === 'distributing' ? (quadratRoom.winnerId ?? localPlayerIds[0])
@@ -332,6 +494,8 @@ if (!errorText.trim() || errorSubmitting) return;
     : playerId;
   const localTurnId = isLocalMode
     ? (room?.status === 'phase1' ? room.playerOrder[room.currentPlayerIndex] : null)
+      ?? (room?.status === 'results' ? tiebreakNext : null)
+      ?? (room?.status === 'phase3' ? room.busfahrerId : null)
       ?? (quadratRoom?.status === 'playing' ? quadratRoom.playerOrder[quadratRoom.currentPlayerIndex] : null)
       ?? (quadratRoom?.status === 'distributing' ? quadratRoom.winnerId : null)
       ?? (circleRoom?.status === 'playing' ? circleRoom.playerOrder[circleRoom.currentPlayerIndex] : null)
@@ -340,34 +504,54 @@ if (!errorText.trim() || errorSubmitting) return;
     && localTurnId !== localActiveId
     && localPlayerIds.includes(localTurnId)
     // In Phase 1 the card result must be acknowledged before handing off the device
-    && (room?.status !== 'phase1' || phase1HandoffReady);
+    // (at the start of a round there is no result yet)
+    && (room?.status !== 'phase1' || phase1HandoffReady || !room.lastAction);
   const activeRoomForHandoff = room ?? quadratRoom ?? circleRoom;
 
   const currentTheme = THEMES.find(t => t.id === theme) ?? THEMES[0];
 
-  // Push notifications: fire when it becomes the current player's turn and tab is hidden
-  const prevTurnPlayerRef = useRef<string | null>(null);
-  const currentTurnPlayerId =
-    room?.status === 'phase1'
-      ? room.playerOrder[room.currentPlayerIndex]
-    : (circleRoom?.status === 'playing' && !circleRoom.pendingAction)
-      ? circleRoom.playerOrder[circleRoom.currentPlayerIndex]
-    : quadratRoom?.status === 'playing'
-      ? quadratRoom.playerOrder[quadratRoom.currentPlayerIndex]
-    : null;
+  // Push notifications: fire when it becomes this player's turn (or they must act) and the tab is hidden
+  const isHostHere = (room?.hostId ?? quadratRoom?.hostId ?? circleRoom?.hostId) === playerId;
+  const myTurn =
+    (room?.status === 'phase1' && room.playerOrder[room.currentPlayerIndex] === playerId)
+    || (room?.status === 'phase2start' && isHostHere)
+    || (room?.status === 'results' && !!room.tiebreakOffered && !!room.tiebreakCandidates?.includes(playerId) && !room.tiebreakPicks?.[playerId])
+    || (room?.status === 'phase3' && room.busfahrerId === playerId)
+    || (circleRoom?.status === 'playing' && !circleRoom.pendingAction && circleRoom.playerOrder[circleRoom.currentPlayerIndex] === playerId)
+    || (quadratRoom?.status === 'playing' && quadratRoom.playerOrder[quadratRoom.currentPlayerIndex] === playerId)
+    || (quadratRoom?.status === 'distributing' && quadratRoom.winnerId === playerId);
+  const prevMyTurnRef = useRef(false);
 
   useEffect(() => {
-    if (isLocalMode || !currentTurnPlayerId) return;
-    if (currentTurnPlayerId !== playerId) {
-      prevTurnPlayerRef.current = currentTurnPlayerId;
-      return;
+    const was = prevMyTurnRef.current;
+    prevMyTurnRef.current = myTurn;
+    if (isLocalMode || !myTurn || was) return;
+    if (document.hidden || !document.hasFocus()) notifyTurn();
+  }, [myTurn]);
+
+  // ESC closes the topmost dialog
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      if (showErrorReport && !errorSubmitting) setShowErrorReport(false);
+      else if (confirmLeave) setConfirmLeave(false);
+      else if (showInfo) setShowInfo(false);
+      else if (joinPrompt && !joinPromptLoading) setJoinPrompt(null);
+      else if (showThemePicker) setShowThemePicker(false);
     }
-    if (prevTurnPlayerRef.current === playerId) return;
-    prevTurnPlayerRef.current = playerId;
-    if ((document.hidden || !document.hasFocus()) && Notification.permission === 'granted') {
-      new Notification('Kartenkater', { body: 'Du bist dran!', icon: '/icon-192.png' });
-    }
-  }, [currentTurnPlayerId]);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showErrorReport, errorSubmitting, confirmLeave, showInfo, joinPrompt, joinPromptLoading, showThemePicker]);
+
+  if (isDev) {
+    return (
+      <Suspense fallback={<div className="waiting-text" style={{ padding: '4rem 1rem' }}>Laden…</div>}>
+        <ErrorBoundary>
+          <DevDashboard />
+        </ErrorBoundary>
+      </Suspense>
+    );
+  }
 
   return (
     <>
@@ -384,6 +568,18 @@ if (!errorText.trim() || errorSubmitting) return;
           Verbindung unterbrochen – wird wiederhergestellt…
         </div>
       )}
+      {!offline && showSyncBanner && inRoom && (
+        <div role="status" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 300,
+          background: '#F59E0B', color: '#111',
+          textAlign: 'center', padding: '8px 16px',
+          fontSize: 13, fontWeight: 700, animation: 'slideDown 0.3s ease-out',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <RefreshCw size={14} strokeWidth={2.5} style={{ animation: 'spin 1s linear infinite' }} />
+          Synchronisiere mit den anderen…
+        </div>
+      )}
 
       {/* Top bar – permanent, rounded card style */}
       <div style={{
@@ -396,7 +592,7 @@ if (!errorText.trim() || errorSubmitting) return;
       }}>
         {/* Left: color theme picker */}
         <div ref={themePickerRef} style={{ position: 'relative' }}>
-          <button className="icon-btn icon-btn-ghost" onClick={() => setShowThemePicker(p => !p)} title="Farbthema">
+          <button className="icon-btn icon-btn-ghost" onClick={() => setShowThemePicker(p => !p)} title="Farbthema" aria-label="Farbthema wählen" aria-expanded={showThemePicker}>
             <span style={{
               display: 'inline-block', width: 16, height: 16, borderRadius: '50%',
               background: `linear-gradient(135deg, ${currentTheme.colors[0]}, ${currentTheme.colors[1]})`,
@@ -414,8 +610,10 @@ if (!errorText.trim() || errorSubmitting) return;
                 <button
                   key={t.id}
                   onClick={() => { setTheme(t.id); setShowThemePicker(false); }}
+                  aria-pressed={theme === t.id}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
+                    display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-start',
+                    minHeight: 0,
                     background: theme === t.id ? 'var(--card-inner)' : 'transparent',
                     border: `2px solid ${theme === t.id ? 'var(--primary)' : 'transparent'}`,
                     borderRadius: 100, padding: '7px 12px', cursor: 'pointer', width: '100%',
@@ -436,25 +634,54 @@ if (!errorText.trim() || errorSubmitting) return;
 
         {/* Center: info on main menu, home when in game/room */}
         {!selectedGame && !inRoom ? (
-          <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(true)} title="App installieren">
+          <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(true)} title="Hilfe" aria-label="Hilfe öffnen">
             <Info size={20} strokeWidth={2} />
           </button>
         ) : (selectedGame || inRoom) ? (
-          <button className="icon-btn icon-btn-ghost" onClick={handleUserLeave} title="Hauptmenü">
+          <button className="icon-btn icon-btn-ghost" onClick={handleHomeClick} title="Hauptmenü" aria-label="Zum Hauptmenü">
             <HomeIcon size={20} strokeWidth={2} />
           </button>
         ) : null}
 
         {/* Right: haptic + dark mode */}
         <div style={{ display: 'flex', gap: 0 }}>
-          <button className="icon-btn icon-btn-ghost" onClick={() => setHapticOn(h => !h)} title="Vibration">
+          <button className="icon-btn icon-btn-ghost" onClick={() => setHapticOn(h => !h)} title={hapticOn ? 'Vibration an' : 'Vibration aus'} aria-label="Vibration" aria-pressed={hapticOn}>
             {hapticOn ? <Bell size={18} strokeWidth={2} /> : <BellOff size={18} strokeWidth={2} />}
           </button>
-          <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode">
+          <button className="icon-btn icon-btn-ghost" onClick={() => setDark(d => !d)} title="Dark Mode" aria-label="Dark Mode" aria-pressed={dark}>
             {dark ? <Sun size={20} strokeWidth={2} /> : <Moon size={20} strokeWidth={2} />}
           </button>
         </div>
       </div>
+
+      {/* Confirm leaving a running game */}
+      {confirmLeave && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 450, padding: '1rem',
+          }}
+          onClick={() => setConfirmLeave(false)}
+        >
+          <div
+            role="dialog" aria-modal="true" aria-labelledby="leave-title"
+            style={{
+              background: 'var(--card)', borderRadius: 24, padding: '24px 22px 18px',
+              textAlign: 'center', maxWidth: 320, width: '100%', boxShadow: 'var(--shadow)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p id="leave-title" style={{ fontSize: 19, fontWeight: 800, margin: '0 0 6px', letterSpacing: '-0.02em' }}>Spiel verlassen?</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 16px', lineHeight: 1.5 }}>
+              {isLocalMode
+                ? 'Das lokale Spiel wird beendet.'
+                : 'Du wirst aus dem laufenden Spiel entfernt und kannst nicht wieder einsteigen.'}
+            </p>
+            <button className="danger" onClick={handleUserLeave}>Verlassen</button>
+            <button className="secondary" onClick={() => setConfirmLeave(false)}>Weiterspielen</button>
+          </div>
+        </div>
+      )}
 
       {/* Too few players popup */}
       {tooFewPlayers && (
@@ -485,7 +712,7 @@ if (!errorText.trim() || errorSubmitting) return;
               </p>
             )}
             <button
-              onClick={handleUserLeave}
+              onClick={() => handleUserLeave()}
               className="secondary"
               style={{ marginTop: 4 }}
             >
@@ -501,10 +728,10 @@ if (!errorText.trim() || errorSubmitting) return;
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 600, padding: '1.25rem',
         }}>
-          <div style={{
+          <div role="dialog" aria-modal="true" aria-label="Willkommen" style={{
             background: 'var(--card)', borderRadius: 28, padding: '28px 24px 24px',
             maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
-            animation: 'fadeIn 0.3s ease',
+            animation: 'fadeInOpacity 0.3s ease',
           }}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <svg viewBox="0 0 100 100" width="88" height="88" style={{ display: 'block', margin: '0 auto 14px', overflow: 'visible' }}>
@@ -593,15 +820,17 @@ if (!errorText.trim() || errorSubmitting) return;
           onClick={() => setShowInfo(false)}
         >
           <div
+            role="dialog" aria-modal="true" aria-label="Hilfe"
             style={{
               background: 'var(--card)', borderRadius: 24, padding: '22px 20px 20px',
               maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
+              maxHeight: 'calc(100dvh - 2rem)', overflowY: 'auto',
             }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Hilfe</span>
-              <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(false)}>
+              <button className="icon-btn icon-btn-ghost" onClick={() => setShowInfo(false)} aria-label="Schließen">
                 <X size={20} strokeWidth={2} />
               </button>
             </div>
@@ -636,16 +865,16 @@ if (!errorText.trim() || errorSubmitting) return;
                   <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
                     <li>Seite in <strong style={{ color: 'var(--text)' }}>Chrome</strong> öffnen</li>
                     <li>Drei-Punkte-Menü <strong style={{ color: 'var(--text)' }}>⋮</strong> antippen</li>
-                    <li><strong style={{ color: 'var(--text)' }}>"App installieren"</strong> wählen</li>
+                    <li><strong style={{ color: 'var(--text)' }}>„App installieren"</strong> wählen</li>
                     <li>Bestätigen – fertig</li>
                   </ol>
                 </div>
                 <div style={{ background: 'var(--card-inner)', borderRadius: 14, padding: '14px 16px' }}>
                   <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: 14 }}>iPhone / iPad</p>
                   <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: 'var(--text-muted)' }}>
-                    <li>Seite in <strong style={{ color: 'var(--text)' }}>Safari</strong> öffnen <span style={{ fontSize: 12 }}>(nicht Chrome!)</span></li>
-                    <li>Teilen-Symbol <strong style={{ color: 'var(--text)' }}>↑</strong> unten antippen</li>
-                    <li><strong style={{ color: 'var(--text)' }}>"Zum Home-Bildschirm"</strong> wählen</li>
+                    <li>Seite in <strong style={{ color: 'var(--text)' }}>Safari</strong> öffnen <span style={{ fontSize: 12 }}>(ab iOS 16.4 auch Chrome)</span></li>
+                    <li>Teilen-Symbol <strong style={{ color: 'var(--text)' }}>↑</strong> antippen</li>
+                    <li><strong style={{ color: 'var(--text)' }}>„Zum Home-Bildschirm"</strong> wählen</li>
                     <li>Namen bestätigen – fertig</li>
                   </ol>
                 </div>
@@ -657,10 +886,10 @@ if (!errorText.trim() || errorSubmitting) return;
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {([
                   { n: 1, title: 'Spiel wählen', text: 'Tippe auf Busfahren, Das Fenster oder Circle.' },
-                  { n: 2, title: 'Raum erstellen', text: 'Tippe auf "Neues Spiel" – du bekommst einen 4-stelligen Raumcode.' },
-                  { n: 3, title: 'Code teilen', text: 'Schick den Code an deine Mitspieler – per Chat oder laut vorlesen.' },
-                  { n: 4, title: 'Beitreten', text: 'Mitspieler tippen "Beitreten", geben den Code ein und sind dabei.' },
-                  { n: 5, title: 'Spiel starten', text: 'Der Host (Ersteller) startet das Spiel sobald alle da sind.' },
+                  { n: 2, title: 'Raum erstellen', text: 'Namen eingeben und „Neuen Raum erstellen" tippen – du bekommst einen 4-stelligen Raumcode.' },
+                  { n: 3, title: 'Code teilen', text: 'Schick Code, Link oder QR-Code an deine Mitspieler.' },
+                  { n: 4, title: 'Beitreten', text: 'Mitspieler geben den Code ein und tippen „Raum beitreten" – oder öffnen einfach den Link.' },
+                  { n: 5, title: 'Spiel starten', text: 'Der Host (Ersteller) startet das Spiel, sobald alle da sind.' },
                 ] as { n: number; title: string; text: string }[]).map(({ n, title, text }) => (
                   <div key={n} style={{
                     display: 'flex', gap: 12, alignItems: 'flex-start',
@@ -681,6 +910,15 @@ if (!errorText.trim() || errorSubmitting) return;
                     </div>
                   </div>
                 ))}
+                <div style={{
+                  background: 'var(--card-inner)', borderRadius: 12, padding: '11px 13px',
+                  border: '1.5px solid var(--border)',
+                }}>
+                  <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13 }}>Nur ein Handy?</p>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    Tippe auf „Lokal (1 Gerät)", trag alle Namen ein und reicht das Handy herum – die App sagt jeweils, wer dran ist.
+                  </p>
+                </div>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
                   Kein Account nötig – einfach losspielen.
                 </p>
@@ -691,13 +929,13 @@ if (!errorText.trim() || errorSubmitting) return;
       )}
 
       {needsHandoff && activeRoomForHandoff && localTurnId && (
-        <div style={{
+        <div role="dialog" aria-modal="true" aria-label="Gerät weitergeben" style={{
           position: 'fixed', inset: 0, background: 'var(--bg)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           zIndex: 500, gap: 8, padding: '2rem', textAlign: 'center',
         }}>
           <p style={{ opacity: 0.55, fontSize: 13, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
-            Jetzt dran
+            {room?.status === 'results' ? 'Stechen – jetzt dran' : room?.status === 'phase3' ? 'Busfahrer – jetzt dran' : 'Jetzt dran'}
           </p>
           <h1 style={{ fontSize: 34, margin: '4px 0 24px', color: 'var(--primary)' }}>
             {activeRoomForHandoff.players[localTurnId]?.name}
@@ -711,28 +949,26 @@ if (!errorText.trim() || errorSubmitting) return;
         </div>
       )}
 
-      {isDev ? <DevDashboard /> : (
-        <ErrorBoundary>
+      <ErrorBoundary>
         <>
           {!inRoom && !selectedGame && <GameSelection onSelect={setSelectedGame} />}
           {!inRoom && selectedGame === 'busfahren' && (
-            <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+            <Home onJoined={handleJoined} onBack={() => setSelectedGame(null)} />
           )}
           {!inRoom && selectedGame === 'quadrat' && (
-            <QuadratHome onJoined={(id, ids) => handleQuadratJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+            <QuadratHome onJoined={(id, ids) => handleQuadratJoined(id, ids)} onBack={() => setSelectedGame(null)} />
           )}
           {!inRoom && selectedGame === 'circle' && (
-            <CircleHome onJoined={(id, ids) => handleCircleJoined(id, ids)} onBack={() => setSelectedGame(null)} initialCode={initialCode ?? undefined} />
+            <CircleHome onJoined={(id, ids) => handleCircleJoined(id, ids)} onBack={() => setSelectedGame(null)} />
           )}
           {showLobby        && <Lobby        room={room}        playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
-          {showGame         && <Game         room={room}        playerId={effectivePlayerId} onLocalTurnDone={isLocalMode ? () => setPhase1HandoffReady(true) : undefined} />}
+          {showGame         && <Game         room={room}        playerId={effectivePlayerId} isLocalMode={isLocalMode} onLocalTurnDone={isLocalMode ? () => setPhase1HandoffReady(true) : undefined} />}
           {showQuadratLobby && <QuadratLobby room={quadratRoom} playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
-          {showQuadratGame  && <QuadratGame  room={quadratRoom} playerId={effectivePlayerId} />}
+          {showQuadratGame  && <QuadratGame  room={quadratRoom} playerId={effectivePlayerId} isLocalMode={isLocalMode} />}
           {showCircleLobby  && <CircleLobby  room={circleRoom}  playerId={isLocalMode ? localPlayerIds[0] : playerId} />}
           {showCircleGame   && <CircleGame   room={circleRoom}  playerId={effectivePlayerId} isLocalMode={isLocalMode} />}
         </>
-        </ErrorBoundary>
-      )}
+      </ErrorBoundary>
 
       {/* Quick-join popup (from share link / QR code) */}
       {joinPrompt && !inRoom && (
@@ -745,6 +981,7 @@ if (!errorText.trim() || errorSubmitting) return;
           onClick={() => !joinPromptLoading && setJoinPrompt(null)}
         >
           <div
+            role="dialog" aria-modal="true" aria-label="Raum beitreten"
             style={{
               background: 'var(--card)', borderRadius: 24, padding: '24px 20px 20px',
               maxWidth: 340, width: '100%', boxShadow: 'var(--shadow)',
@@ -753,7 +990,7 @@ if (!errorText.trim() || errorSubmitting) return;
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Raum beitreten</span>
-              <button className="icon-btn icon-btn-ghost" onClick={() => setJoinPrompt(null)} disabled={joinPromptLoading}>
+              <button className="icon-btn icon-btn-ghost" onClick={() => setJoinPrompt(null)} disabled={joinPromptLoading} aria-label="Schließen">
                 <X size={20} strokeWidth={2} />
               </button>
             </div>
@@ -767,6 +1004,7 @@ if (!errorText.trim() || errorSubmitting) return;
               onChange={e => setJoinPromptName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleQuickJoin()}
               placeholder="Name eingeben…"
+              maxLength={20}
               disabled={joinPromptLoading}
               autoFocus
               style={{ marginBottom: joinPromptError ? 8 : 16 }}
@@ -782,7 +1020,7 @@ if (!errorText.trim() || errorSubmitting) return;
       )}
 
       {/* Bottom bar */}
-      {!isDev && <div style={{
+      <div style={{
         position: 'fixed', bottom: 10, left: '50%', transform: 'translateX(-50%)',
         zIndex: 100, width: 'calc(100% - 24px)', maxWidth: 480,
         background: 'var(--card)', border: '1.5px solid var(--border)',
@@ -803,7 +1041,7 @@ if (!errorText.trim() || errorSubmitting) return;
           <AlertTriangle size={15} strokeWidth={2} />
           Fehler melden
         </button>
-      </div>}
+      </div>
 
       {/* Error report modal */}
       {showErrorReport && (
@@ -816,6 +1054,7 @@ if (!errorText.trim() || errorSubmitting) return;
           onClick={() => { if (!errorSubmitting) setShowErrorReport(false); }}
         >
           <div
+            role="dialog" aria-modal="true" aria-label="Fehler melden"
             style={{
               background: 'var(--card)', borderRadius: 24, padding: '22px 20px 20px',
               maxWidth: 360, width: '100%', boxShadow: 'var(--shadow)',
@@ -823,8 +1062,8 @@ if (!errorText.trim() || errorSubmitting) return;
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em' }}>Fehler melden</span>
-              <button className="icon-btn icon-btn-ghost" onClick={() => setShowErrorReport(false)} disabled={errorSubmitting}>
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.02em', color: 'var(--text)' }}>Fehler melden</span>
+              <button className="icon-btn icon-btn-ghost" onClick={() => setShowErrorReport(false)} disabled={errorSubmitting} aria-label="Schließen">
                 <X size={20} strokeWidth={2} />
               </button>
             </div>
@@ -856,16 +1095,21 @@ if (!errorText.trim() || errorSubmitting) return;
                 <textarea
                   value={errorText}
                   onChange={e => setErrorText(e.target.value)}
-                  placeholder='z.B. "Spiel hat sich aufgehängt nach dem Starten …"'
+                  placeholder='z.B. „Spiel hat sich aufgehängt nach dem Starten …"'
+                  aria-label="Fehlerbeschreibung"
+                  maxLength={ERROR_MAX_LENGTH}
                   rows={4}
                   style={{
                     width: '100%', resize: 'none', borderRadius: 14, padding: '12px 14px',
                     background: 'var(--card-inner)', border: '1.5px solid var(--border)',
-                    color: 'var(--text)', fontSize: 13, lineHeight: 1.6,
-                    fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 12,
+                    color: 'var(--text)', fontSize: 16, lineHeight: 1.5,
+                    fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 4,
                     outline: 'none',
                   }}
                 />
+                <p style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
+                  {errorText.length} / {ERROR_MAX_LENGTH}
+                </p>
                 {errorSendFailed && (
                   <p style={{ margin: '0 0 10px', fontSize: 13, color: '#e53e3e', fontWeight: 600, textAlign: 'center' }}>
                     Senden fehlgeschlagen. Bitte prüfe deine Verbindung.
