@@ -4,7 +4,7 @@ import { collection, getDocs, deleteDoc, doc, query, orderBy, limit } from 'fire
 import { app, db } from '../firebase';
 import { LogIn, LogOut, RefreshCw, Trash2 } from 'lucide-react';
 
-// Client-side gate only – the real protection is isAdmin() in firestore.rules (UID check)
+// Client-side gate only – the real protection is isAdmin() in firestore.rules (same e-mail check)
 const ALLOWED_EMAIL = 'vooke.meyer@t-online.de';
 const auth = getAuth(app);
 const provider = new GithubAuthProvider();
@@ -109,7 +109,7 @@ export default function DevDashboard() {
       setRooms(allRooms);
       setErrors(allErrors);
     } catch (e) {
-      setDataError(`Laden fehlgeschlagen: ${(e as Error).message ?? e}. Stimmt die Admin-UID in den Firestore-Regeln?`);
+      setDataError(`Laden fehlgeschlagen: ${(e as Error).message ?? e}. Sind die Firestore-Regeln veröffentlicht?`);
     } finally {
       setDataLoading(false);
     }

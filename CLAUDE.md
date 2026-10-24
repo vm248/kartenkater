@@ -117,14 +117,14 @@ Alle Spiele unterstützen einen Lokal-Modus (Gerät wird herumgegeben). `App.tsx
 
 - Bottom Bar enthält "Fehler melden"-Button → öffnet Modal mit Textarea
 - `submitErrorReport()` in `src/errorActions.ts` schreibt in Firestore `errors/{id}`: `{ message, playerId, gameType?, roomId?, timestamp, userAgent }`
-- Firestore Rules: `errors` erlaubt create ohne Auth, read/delete nur für `isAdmin()` (UID-Check in `firestore.rules`)
+- Firestore Rules: `errors` erlaubt create ohne Auth, read/delete nur für `isAdmin()` (E-Mail-Check in `firestore.rules`)
 
 ### Developer Dashboard (DevDashboard.tsx)
 
 - Erreichbar unter `/?dashboard` — App rendert dann nur das Dashboard (lazy geladen inkl. `firebase/auth`, keine Raum-Subscriptions)
 - **Login**: GitHub OAuth via Firebase Auth (`signInWithPopup`). Nur `vooke.meyer@t-online.de` kommt durch, andere werden sofort ausgeloggt mit Redirect-Button zum Hauptmenü
 - **Inhalt**: Stats-Grid (Räume pro Spieltyp, Spieler gesamt), Fehlerberichte-Liste (löschen einzeln/alle), Räume-Liste aller 3 Collections (löschen einzeln), Cleanup-Button (löscht finished + ≤1 Spieler)
-- Firebase Auth muss in Firebase Console aktiviert sein (GitHub-Provider). Die E-Mail-Prüfung ist nur clientseitig; echte Absicherung = `isAdmin()` in `firestore.rules` (vergleicht `request.auth.uid`, UID steht im Dashboard-Header)
+- Firebase Auth muss in Firebase Console aktiviert sein (GitHub-Provider). Die E-Mail-Prüfung ist nur clientseitig; echte Absicherung = `isAdmin()` in `firestore.rules` (vergleicht `request.auth.token.email`)
 - Cleanup löscht nur Räume älter als 1 h (finished oder ≤ 1 Spieler)
 
 ### Firebase
