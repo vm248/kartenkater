@@ -32,9 +32,8 @@ service cloud.firestore {
     }
 
     // Only the developer account may use the dashboard (read errors, delete anything).
-    // Replace the UID below with the one shown in the dashboard header (Firebase Console → Authentication → Users).
     function isAdmin() {
-      return request.auth != null && request.auth.uid == 'HIER_DEINE_FIREBASE_UID_EINTRAGEN';
+      return request.auth != null && request.auth.token.email == 'vooke.meyer@t-online.de';
     }
 
     // Admin, last player leaving, local rooms (whole table leaves together) or rooms older than 24h
